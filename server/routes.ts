@@ -249,51 +249,133 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/github/user", requireAuth, async (_req, res) => {
+    try {
+      const { getUncachableGitHubClient } = await import("./github-client");
+      const octokit = await getUncachableGitHubClient();
+      const { data } = await octokit.users.getAuthenticated();
+      res.json({ login: data.login, name: data.name, avatar: data.avatar_url, url: data.html_url });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to get GitHub user" });
+    }
+  });
+
   app.get("/api/github/repos", requireAuth, async (_req, res) => {
     try {
-      const repos = await storage.getAllGithubRepos();
+      const { getUncachableGitHubClient } = await import("./github-client");
+      const octokit = await getUncachableGitHubClient();
+      const { data } = await octokit.repos.listForAuthenticatedUser({
+        sort: "updated",
+        per_page: 50,
+      });
+      const repos = data.map(r => ({
+        id: r.id,
+        name: r.name,
+        full_name: r.full_name,
+        description: r.description,
+        html_url: r.html_url,
+        default_branch: r.default_branch,
+        private: r.private,
+        updated_at: r.updated_at,
+        language: r.language,
+        has_pages: r.has_pages,
+      }));
       res.json(repos);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch repositories" });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to fetch repositories" });
     }
   });
 
   app.post("/api/github/repos", requireAuth, async (req, res) => {
     try {
-      const { name, repoUrl, branch } = req.body;
-      if (!name || !repoUrl) return res.status(400).json({ error: "Name and URL required" });
-      const repo = await storage.createGithubRepo({ name, repoUrl, branch: branch || "main", status: "connected" });
-      await storage.createLog({ action: "GitHub repo connected", details: name, source: "github" });
-      res.status(201).json(repo);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to connect repository" });
+      const { name, description, isPrivate } = req.body;
+      if (!name) return res.status(400).json({ error: "Repository name required" });
+      const { getUncachableGitHubClient } = await import("./github-client");
+      const octokit = await getUncachableGitHubClient();
+      const { data } = await octokit.repos.createForAuthenticatedUser({
+        name,
+        description: description || "",
+        private: isPrivate || false,
+        auto_init: true,
+      });
+      await storage.createLog({ action: "GitHub repo created", details: data.full_name, source: "github" });
+      res.status(201).json({
+        id: data.id,
+        name: data.name,
+        full_name: data.full_name,
+        html_url: data.html_url,
+        default_branch: data.default_branch,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to create repository" });
     }
   });
 
-  app.post("/api/github/repos/:id/sync", requireAuth, async (req, res) => {
+  app.post("/api/github/deploy", requireAuth, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
-      await storage.updateGithubRepo(id, { status: "syncing" } as any);
-      setTimeout(async () => {
-        try {
-          await storage.updateGithubRepo(id, { status: "connected" } as any);
-        } catch {}
-      }, 3000);
-      await storage.createLog({ action: "GitHub sync initiated", source: "github" });
-      res.json({ success: true, message: "Sync started" });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to sync repository" });
+      const { owner, repo, htmlContent, commitMessage } = req.body;
+      if (!owner || !repo || !htmlContent) {
+        return res.status(400).json({ error: "Owner, repo, and htmlContent required" });
+      }
+
+      const { getUncachableGitHubClient } = await import("./github-client");
+      const octokit = await getUncachableGitHubClient();
+
+      const branch = "gh-pages";
+      let sha: string | undefined;
+
+      try {
+        const { data: ref } = await octokit.git.getRef({ owner, repo, ref: `heads/${branch}` });
+        sha = ref.object.sha;
+      } catch {
+        const { data: mainRef } = await octokit.git.getRef({ owner, repo, ref: "heads/main" });
+        await octokit.git.createRef({ owner, repo, ref: `refs/heads/${branch}`, sha: mainRef.object.sha });
+        sha = mainRef.object.sha;
+      }
+
+      const content = Buffer.from(htmlContent).toString("base64");
+
+      let existingFileSha: string | undefined;
+      try {
+        const { data: fileData } = await octokit.repos.getContent({ owner, repo, path: "index.html", ref: branch });
+        if (!Array.isArray(fileData) && fileData.type === "file") {
+          existingFileSha = fileData.sha;
+        }
+      } catch {}
+
+      await octokit.repos.createOrUpdateFileContents({
+        owner,
+        repo,
+        path: "index.html",
+        message: commitMessage || "Deploy to GitHub Pages",
+        content,
+        branch,
+        sha: existingFileSha,
+      });
+
+      try {
+        await octokit.repos.createPagesSite({ owner, repo, source: { branch, path: "/" } });
+      } catch {}
+
+      const pageUrl = `https://${owner}.github.io/${repo}/`;
+      await storage.createLog({ action: "GitHub Pages deployed", details: `${owner}/${repo}`, source: "github" });
+
+      res.json({ success: true, url: pageUrl, message: `Deployed to ${pageUrl}` });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Deployment failed" });
     }
   });
 
-  app.delete("/api/github/repos/:id", requireAuth, async (req, res) => {
+  app.delete("/api/github/repos/:owner/:repo", requireAuth, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
-      await storage.deleteGithubRepo(id);
-      await storage.createLog({ action: "GitHub repo disconnected", source: "github" });
+      const { owner, repo } = req.params;
+      const { getUncachableGitHubClient } = await import("./github-client");
+      const octokit = await getUncachableGitHubClient();
+      await octokit.repos.delete({ owner, repo });
+      await storage.createLog({ action: "GitHub repo deleted", details: `${owner}/${repo}`, source: "github" });
       res.status(204).send();
-    } catch (error) {
-      res.status(500).json({ error: "Failed to disconnect repository" });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to delete repository" });
     }
   });
 

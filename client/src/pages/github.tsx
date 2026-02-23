@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
@@ -14,103 +16,147 @@ import {
 } from "@/components/ui/dialog";
 import {
   GitBranch,
-  GitCommit,
-  Link as LinkIcon,
-  Unlink,
   ExternalLink,
   Loader2,
   FolderGit2,
-  Clock,
-  AlertCircle,
-  CheckCircle2,
   Plus,
+  Globe,
+  Lock,
+  Rocket,
+  User,
+  CheckCircle2,
+  Search,
+  Code2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface GitHubRepo {
   id: number;
   name: string;
-  repoUrl: string;
-  branch: string;
-  lastSync: string | null;
-  status: string;
-  createdAt: string;
+  full_name: string;
+  description: string | null;
+  html_url: string;
+  default_branch: string;
+  private: boolean;
+  updated_at: string;
+  language: string | null;
+  has_pages: boolean;
+}
+
+interface GitHubUser {
+  login: string;
+  name: string;
+  avatar: string;
+  url: string;
 }
 
 export default function GitHubPage() {
   const { toast } = useToast();
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [repoUrl, setRepoUrl] = useState("");
-  const [branch, setBranch] = useState("main");
-  const [repoName, setRepoName] = useState("");
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [deployDialogOpen, setDeployDialogOpen] = useState(false);
+  const [newRepoName, setNewRepoName] = useState("");
+  const [newRepoDesc, setNewRepoDesc] = useState("");
+  const [newRepoPrivate, setNewRepoPrivate] = useState(false);
+  const [deployRepo, setDeployRepo] = useState<GitHubRepo | null>(null);
+  const [deployHtml, setDeployHtml] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
 
-  const { data: repos = [], isLoading } = useQuery<GitHubRepo[]>({
-    queryKey: ["/api/github/repos"],
+  const { data: user, isLoading: userLoading } = useQuery<GitHubUser>({
+    queryKey: ["/api/github/user"],
   });
 
-  const connectRepo = useMutation({
+  const { data: repos = [], isLoading: reposLoading } = useQuery<GitHubRepo[]>({
+    queryKey: ["/api/github/repos"],
+    enabled: !!user,
+  });
+
+  const createRepo = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/github/repos", {
-        name: repoName,
-        repoUrl,
-        branch,
+        name: newRepoName,
+        description: newRepoDesc,
+        isPrivate: newRepoPrivate,
       });
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/github/repos"] });
-      setDialogOpen(false);
-      setRepoUrl("");
-      setBranch("main");
-      setRepoName("");
-      toast({ title: "Repository connected" });
+      setCreateDialogOpen(false);
+      setNewRepoName("");
+      setNewRepoDesc("");
+      toast({ title: "Repository created successfully" });
     },
     onError: (error: Error) => {
-      toast({ title: "Failed to connect", description: error.message, variant: "destructive" });
+      toast({ title: "Failed to create repo", description: error.message, variant: "destructive" });
     },
   });
 
-  const disconnectRepo = useMutation({
-    mutationFn: async (id: number) => {
-      await apiRequest("DELETE", `/api/github/repos/${id}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/github/repos"] });
-      toast({ title: "Repository disconnected" });
-    },
-  });
-
-  const syncRepo = useMutation({
-    mutationFn: async (id: number) => {
-      const res = await apiRequest("POST", `/api/github/repos/${id}/sync`);
+  const deployToPages = useMutation({
+    mutationFn: async () => {
+      if (!deployRepo || !user) throw new Error("No repo selected");
+      const res = await apiRequest("POST", "/api/github/deploy", {
+        owner: user.login,
+        repo: deployRepo.name,
+        htmlContent: deployHtml,
+        commitMessage: "Deploy via JARVIS",
+      });
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: { url: string }) => {
+      setDeployDialogOpen(false);
+      setDeployHtml("");
+      setDeployRepo(null);
       queryClient.invalidateQueries({ queryKey: ["/api/github/repos"] });
-      toast({ title: "Sync initiated" });
+      toast({
+        title: "Deployed to GitHub Pages!",
+        description: `Live at: ${data.url}`,
+      });
     },
     onError: (error: Error) => {
-      toast({ title: "Sync failed", description: error.message, variant: "destructive" });
+      toast({ title: "Deployment failed", description: error.message, variant: "destructive" });
     },
   });
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "connected": return "text-emerald-500 border-emerald-500/30";
-      case "syncing": return "text-sky-500 border-sky-500/30";
-      case "error": return "text-red-500 border-red-500/30";
-      default: return "text-muted-foreground";
-    }
+  const filteredRepos = repos.filter(r =>
+    r.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (r.description || "").toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const langColor = (lang: string | null) => {
+    const colors: Record<string, string> = {
+      JavaScript: "bg-yellow-400", TypeScript: "bg-blue-500", Python: "bg-green-500",
+      HTML: "bg-orange-500", CSS: "bg-purple-500", Java: "bg-red-500",
+      Go: "bg-cyan-500", Rust: "bg-amber-700", Ruby: "bg-red-600",
+    };
+    return colors[lang || ""] || "bg-gray-400";
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "connected": return CheckCircle2;
-      case "syncing": return Loader2;
-      case "error": return AlertCircle;
-      default: return GitBranch;
-    }
-  };
+  if (userLoading) {
+    return (
+      <div className="p-6 space-y-4 max-w-4xl mx-auto">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-20 w-full" />
+        <div className="grid gap-3">
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-4 p-6">
+        <div className="w-16 h-16 rounded-xl bg-muted/50 flex items-center justify-center">
+          <FolderGit2 className="w-8 h-8 text-muted-foreground" />
+        </div>
+        <h2 className="text-lg font-semibold">GitHub Not Connected</h2>
+        <p className="text-sm text-muted-foreground text-center max-w-sm">
+          GitHub integration needs to be reconnected. Please refresh the page or contact support.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-4xl mx-auto">
@@ -118,64 +164,66 @@ export default function GitHubPage() {
         <div>
           <h1 className="text-xl md:text-2xl font-bold flex items-center gap-2" data-testid="text-github-title">
             <GitBranch className="w-5 h-5 text-primary" />
-            GitHub Integration
+            GitHub
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Connect repositories for version control and code management.
+            Manage repositories and deploy to GitHub Pages.
           </p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
           <DialogTrigger asChild>
-            <Button data-testid="button-connect-repo" size="sm" className="gap-2 text-xs">
+            <Button data-testid="button-create-repo" size="sm" className="gap-2 text-xs">
               <Plus className="w-3 h-3" />
-              Connect Repo
+              New Repository
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <FolderGit2 className="w-4 h-4 text-primary" />
-                Connect Repository
+                Create Repository
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-4 mt-2">
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Repository Name</label>
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Name</label>
                 <Input
-                  data-testid="input-repo-name"
-                  placeholder="e.g. my-project"
-                  value={repoName}
-                  onChange={(e) => setRepoName(e.target.value)}
+                  data-testid="input-new-repo-name"
+                  placeholder="my-website"
+                  value={newRepoName}
+                  onChange={(e) => setNewRepoName(e.target.value)}
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">GitHub URL</label>
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Description</label>
                 <Input
-                  data-testid="input-repo-url"
-                  placeholder="https://github.com/user/repo"
-                  value={repoUrl}
-                  onChange={(e) => setRepoUrl(e.target.value)}
+                  data-testid="input-new-repo-desc"
+                  placeholder="A cool website built with JARVIS"
+                  value={newRepoDesc}
+                  onChange={(e) => setNewRepoDesc(e.target.value)}
                 />
               </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Branch</label>
-                <Input
-                  data-testid="input-repo-branch"
-                  placeholder="main"
-                  value={branch}
-                  onChange={(e) => setBranch(e.target.value)}
+              <div className="flex items-center justify-between py-2">
+                <div className="flex items-center gap-2">
+                  {newRepoPrivate ? <Lock className="w-4 h-4" /> : <Globe className="w-4 h-4" />}
+                  <span className="text-sm">{newRepoPrivate ? "Private" : "Public"}</span>
+                </div>
+                <Switch
+                  data-testid="switch-repo-private"
+                  checked={newRepoPrivate}
+                  onCheckedChange={setNewRepoPrivate}
                 />
               </div>
               <Button
-                data-testid="button-save-repo"
-                onClick={() => connectRepo.mutate()}
-                disabled={!repoName || !repoUrl || connectRepo.isPending}
+                data-testid="button-submit-create-repo"
+                onClick={() => createRepo.mutate()}
+                disabled={!newRepoName || createRepo.isPending}
                 className="w-full gap-2"
               >
-                {connectRepo.isPending ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" /> Connecting...</>
+                {createRepo.isPending ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Creating...</>
                 ) : (
-                  <><LinkIcon className="w-4 h-4" /> Connect Repository</>
+                  <><Plus className="w-4 h-4" /> Create Repository</>
                 )}
               </Button>
             </div>
@@ -183,130 +231,186 @@ export default function GitHubPage() {
         </Dialog>
       </div>
 
-      {isLoading ? (
+      <Card>
+        <CardContent className="p-4 flex items-center gap-4">
+          <img
+            src={user.avatar}
+            alt={user.login}
+            className="w-12 h-12 rounded-full border-2 border-border"
+            data-testid="img-github-avatar"
+          />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <h3 className="font-semibold text-sm" data-testid="text-github-name">{user.name || user.login}</h3>
+              <Badge variant="outline" className="text-[10px] gap-1 h-5 text-emerald-500 border-emerald-500/30">
+                <CheckCircle2 className="w-3 h-3" />
+                Connected
+              </Badge>
+            </div>
+            <a href={user.url} target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:text-primary font-mono">
+              @{user.login}
+            </a>
+          </div>
+          <div className="text-right shrink-0">
+            <p className="text-2xl font-bold" data-testid="text-repo-count">{repos.length}</p>
+            <p className="text-[10px] text-muted-foreground">Repositories</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Input
+          data-testid="input-search-repos"
+          placeholder="Search repositories..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-9 h-9 text-sm"
+        />
+      </div>
+
+      {reposLoading ? (
         <div className="space-y-3">
-          {[1, 2].map((i) => (
-            <Card key={i}>
+          {[1, 2, 3].map(i => (
+            <Card key={i}><CardContent className="p-4"><Skeleton className="h-16 w-full" /></CardContent></Card>
+          ))}
+        </div>
+      ) : filteredRepos.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <FolderGit2 className="w-10 h-10 text-muted-foreground/30 mb-3" />
+            <p className="text-sm text-muted-foreground">
+              {searchTerm ? "No matching repositories" : "No repositories yet"}
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-2">
+          {filteredRepos.map((repo) => (
+            <Card key={repo.id} className="hover-elevate" data-testid={`card-repo-${repo.id}`}>
               <CardContent className="p-4">
-                <div className="h-5 w-32 bg-muted animate-pulse rounded mb-2" />
-                <div className="h-4 w-48 bg-muted animate-pulse rounded" />
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-lg bg-muted/50 flex items-center justify-center shrink-0 mt-0.5">
+                      <Code2 className="w-4 h-4 text-muted-foreground" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-semibold text-sm">{repo.name}</h3>
+                        <Badge variant="outline" className="text-[10px] h-5 gap-1">
+                          {repo.private ? <Lock className="w-2.5 h-2.5" /> : <Globe className="w-2.5 h-2.5" />}
+                          {repo.private ? "Private" : "Public"}
+                        </Badge>
+                        {repo.has_pages && (
+                          <Badge variant="outline" className="text-[10px] h-5 gap-1 text-emerald-500 border-emerald-500/30">
+                            <Rocket className="w-2.5 h-2.5" />
+                            Pages
+                          </Badge>
+                        )}
+                      </div>
+                      {repo.description && (
+                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{repo.description}</p>
+                      )}
+                      <div className="flex items-center gap-3 mt-1.5 text-[11px] text-muted-foreground">
+                        {repo.language && (
+                          <span className="flex items-center gap-1">
+                            <span className={`w-2 h-2 rounded-full ${langColor(repo.language)}`} />
+                            {repo.language}
+                          </span>
+                        )}
+                        <span className="flex items-center gap-1">
+                          <GitBranch className="w-3 h-3" />
+                          {repo.default_branch}
+                        </span>
+                        <span className="font-mono">
+                          {new Date(repo.updated_at).toLocaleDateString()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs h-7 gap-1"
+                      onClick={() => {
+                        setDeployRepo(repo);
+                        setDeployDialogOpen(true);
+                      }}
+                      data-testid={`button-deploy-${repo.id}`}
+                    >
+                      <Rocket className="w-3 h-3" />
+                      Deploy
+                    </Button>
+                    <a href={repo.html_url} target="_blank" rel="noopener noreferrer">
+                      <Button size="icon" variant="ghost" className="w-7 h-7" data-testid={`button-open-repo-${repo.id}`}>
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </Button>
+                    </a>
+                    {repo.has_pages && (
+                      <a href={`https://${user.login}.github.io/${repo.name}/`} target="_blank" rel="noopener noreferrer">
+                        <Button size="icon" variant="ghost" className="w-7 h-7" data-testid={`button-pages-${repo.id}`}>
+                          <Globe className="w-3.5 h-3.5 text-emerald-500" />
+                        </Button>
+                      </a>
+                    )}
+                  </div>
+                </div>
               </CardContent>
             </Card>
           ))}
         </div>
-      ) : repos.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <div className="w-16 h-16 rounded-xl bg-muted/50 flex items-center justify-center mb-4">
-              <FolderGit2 className="w-8 h-8 text-muted-foreground" />
-            </div>
-            <h3 className="font-medium mb-1">No repositories connected</h3>
-            <p className="text-sm text-muted-foreground text-center max-w-sm">
-              Connect a GitHub repository to manage your code, track changes, and enable version control for your projects.
-            </p>
-            <Button
-              className="mt-4 gap-2"
-              variant="outline"
-              onClick={() => setDialogOpen(true)}
-              data-testid="button-connect-first-repo"
-            >
-              <LinkIcon className="w-4 h-4" />
-              Connect Your First Repository
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-3">
-          {repos.map((repo) => {
-            const StatusIcon = getStatusIcon(repo.status);
-            return (
-              <Card key={repo.id} className="hover-elevate" data-testid={`card-repo-${repo.id}`}>
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3 min-w-0">
-                      <div className="w-10 h-10 rounded-lg bg-muted/50 flex items-center justify-center shrink-0">
-                        <FolderGit2 className="w-5 h-5 text-muted-foreground" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="font-semibold text-sm">{repo.name}</h3>
-                          <Badge variant="outline" className={`text-[10px] h-5 ${getStatusColor(repo.status)}`}>
-                            <StatusIcon className={`w-3 h-3 mr-1 ${repo.status === "syncing" ? "animate-spin" : ""}`} />
-                            {repo.status}
-                          </Badge>
-                        </div>
-                        <p className="text-xs text-muted-foreground font-mono truncate mt-0.5">{repo.repoUrl}</p>
-                        <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <GitBranch className="w-3 h-3" />
-                            {repo.branch}
-                          </span>
-                          {repo.lastSync && (
-                            <span className="flex items-center gap-1">
-                              <Clock className="w-3 h-3" />
-                              {new Date(repo.lastSync).toLocaleString()}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <a href={repo.repoUrl} target="_blank" rel="noopener noreferrer">
-                        <Button size="icon" variant="ghost" className="w-7 h-7" data-testid={`button-open-repo-${repo.id}`}>
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </Button>
-                      </a>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="text-xs h-7"
-                        onClick={() => syncRepo.mutate(repo.id)}
-                        disabled={syncRepo.isPending}
-                        data-testid={`button-sync-repo-${repo.id}`}
-                      >
-                        <GitCommit className="w-3 h-3 mr-1" />
-                        Sync
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="w-7 h-7"
-                        onClick={() => disconnectRepo.mutate(repo.id)}
-                        data-testid={`button-disconnect-repo-${repo.id}`}
-                      >
-                        <Unlink className="w-3.5 h-3.5 text-destructive" />
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
       )}
 
-      <Card>
-        <CardContent className="p-5">
-          <h3 className="font-semibold text-sm flex items-center gap-2 mb-3">
-            <GitBranch className="w-4 h-4 text-muted-foreground" />
-            How It Works
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs text-muted-foreground">
-            <div className="space-y-1">
-              <p className="font-medium text-foreground">1. Connect</p>
-              <p>Add your GitHub repository URL and branch to track.</p>
+      <Dialog open={deployDialogOpen} onOpenChange={setDeployDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Rocket className="w-4 h-4 text-primary" />
+              Deploy to GitHub Pages
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div className="bg-muted/30 border border-border/30 rounded-lg p-3">
+              <p className="text-xs text-muted-foreground mb-1">Deploying to:</p>
+              <p className="text-sm font-semibold font-mono">{deployRepo?.full_name}</p>
+              {deployRepo && user && (
+                <p className="text-[11px] text-emerald-500 mt-1">
+                  Will be live at: https://{user.login}.github.io/{deployRepo.name}/
+                </p>
+              )}
             </div>
-            <div className="space-y-1">
-              <p className="font-medium text-foreground">2. Manage</p>
-              <p>View status, sync changes, and manage branches.</p>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                HTML Content
+              </label>
+              <p className="text-[11px] text-muted-foreground">
+                Paste the HTML code from chat, or copy from the preview panel.
+              </p>
+              <textarea
+                data-testid="textarea-deploy-html"
+                value={deployHtml}
+                onChange={(e) => setDeployHtml(e.target.value)}
+                rows={8}
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs font-mono resize-none focus:outline-none focus:ring-1 focus:ring-primary"
+                placeholder="<!DOCTYPE html>..."
+              />
             </div>
-            <div className="space-y-1">
-              <p className="font-medium text-foreground">3. Integrate</p>
-              <p>Use with AI to analyze code, review PRs, and automate tasks.</p>
-            </div>
+            <Button
+              data-testid="button-submit-deploy"
+              onClick={() => deployToPages.mutate()}
+              disabled={!deployHtml.trim() || deployToPages.isPending}
+              className="w-full gap-2"
+            >
+              {deployToPages.isPending ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Deploying...</>
+              ) : (
+                <><Rocket className="w-4 h-4" /> Deploy to GitHub Pages</>
+              )}
+            </Button>
           </div>
-        </CardContent>
-      </Card>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
