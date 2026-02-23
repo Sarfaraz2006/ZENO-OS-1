@@ -21,11 +21,12 @@ A comprehensive Jarvis-like AI assistant platform serving as a personal AI contr
 - `client/src/App.tsx` - Main app with routing, sidebar, theme, auth
 - `client/src/lib/auth.tsx` - Auth context provider
 - `client/src/lib/theme.tsx` - Dark/light theme provider
-- `client/src/pages/dashboard.tsx` - Command center dashboard
-- `client/src/pages/chat.tsx` - AI chat interface with model selection, voice, streaming
-- `client/src/pages/models.tsx` - Model management (add/remove OpenRouter models by ID)
-- `client/src/pages/settings.tsx` - API key management, password change
-- `client/src/components/app-sidebar.tsx` - Navigation sidebar
+- `client/src/pages/dashboard.tsx` - Command center dashboard with stats, capabilities, activity
+- `client/src/pages/chat.tsx` - AI chat with model selection, voice, streaming, copy messages
+- `client/src/pages/models.tsx` - Model hub (add/search/filter/toggle/favorite models)
+- `client/src/pages/settings.tsx` - API keys, password change, API usage docs
+- `client/src/pages/login.tsx` - Futuristic login page with secure access
+- `client/src/components/app-sidebar.tsx` - Navigation sidebar with branding
 
 ## File Connections
 ```
@@ -45,15 +46,21 @@ DashboardPage -> /api/stats, /api/logs -> server/storage.ts
 - Password: `admin` (change in Settings)
 
 ## Features Implemented
-1. Password-protected dashboard
+1. Password-protected dashboard with secure login
 2. AI chat with OpenRouter streaming (5 pre-configured models)
-3. Dynamic model management (add any model by OpenRouter ID)
-4. API key management for external access
-5. Dark/light theme
-6. Voice input (Web Speech API)
-7. Continuous conversation mode
-8. Activity logging
-9. Dashboard with stats
+3. Dynamic model management (add any model by OpenRouter ID, search, filter by category, favorites)
+4. API key management for external access (generate, toggle, delete)
+5. Dark/light theme toggle
+6. Voice input (Web Speech API) with speech-to-text
+7. Voice output (Text-to-Speech) with toggle
+8. Continuous conversation mode (auto-listen after response)
+9. Activity logging with source icons
+10. Dashboard with stats, platform capabilities overview, quick actions
+11. REST API documentation in settings
+12. Copy message to clipboard
+13. Collapsible chat sidebar
+14. Model cost display and context window info
+15. Browse OpenRouter link for discovering models
 
 ## Database
 PostgreSQL with tables: users, ai_models, api_keys, activity_logs, settings, conversations, messages

@@ -44,7 +44,7 @@ function Router() {
 
 function AuthenticatedApp() {
   const style = {
-    "--sidebar-width": "14rem",
+    "--sidebar-width": "13rem",
     "--sidebar-width-icon": "3rem",
   };
 
@@ -53,7 +53,7 @@ function AuthenticatedApp() {
       <div className="flex h-screen w-full">
         <AppSidebar />
         <div className="flex flex-col flex-1 min-w-0">
-          <header className="flex items-center justify-between gap-1 px-3 py-2 border-b border-border/50 h-12 shrink-0">
+          <header className="flex items-center justify-between gap-2 px-3 h-12 shrink-0 border-b border-border/30 bg-background/80 backdrop-blur-sm">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
             <ThemeToggle />
           </header>

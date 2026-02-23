@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +31,8 @@ import {
   DollarSign,
   Layers,
   Sparkles,
+  ExternalLink,
+  Zap,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { AiModel } from "@shared/schema";
@@ -105,154 +106,173 @@ export default function ModelsPage() {
 
   const categories = ["all", ...new Set(models.map((m) => m.category || "general"))];
 
+  const getCategoryColor = (cat: string | null) => {
+    switch (cat) {
+      case "coding": return "text-emerald-400 bg-emerald-500/10 border-emerald-500/20";
+      case "reasoning": return "text-violet-400 bg-violet-500/10 border-violet-500/20";
+      case "creative": return "text-rose-400 bg-rose-500/10 border-rose-500/20";
+      case "fast": return "text-amber-400 bg-amber-500/10 border-amber-500/20";
+      default: return "text-sky-400 bg-sky-500/10 border-sky-500/20";
+    }
+  };
+
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
+    <div className="p-4 md:p-6 space-y-5 max-w-7xl mx-auto">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2" data-testid="text-models-title">
-            <Bot className="w-6 h-6 text-primary" />
-            AI Models
+          <h1 className="text-xl md:text-2xl font-bold flex items-center gap-2" data-testid="text-models-title">
+            <Cpu className="w-5 h-5 text-primary" />
+            AI Model Hub
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Manage your AI models. Add any OpenRouter model by ID.
+            {models.length} models configured. Add any OpenRouter model by ID.
           </p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button data-testid="button-add-model" className="gap-2">
-              <Plus className="w-4 h-4" />
-              Add Model
+        <div className="flex gap-2">
+          <a href="https://openrouter.ai/models" target="_blank" rel="noopener noreferrer">
+            <Button variant="outline" size="sm" className="gap-2 text-xs" data-testid="link-browse-openrouter">
+              <ExternalLink className="w-3 h-3" />
+              Browse OpenRouter
             </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add OpenRouter Model</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 mt-2">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Display Name</label>
-                <Input
-                  data-testid="input-model-name"
-                  placeholder="e.g. DeepSeek V3"
-                  value={newModel.name}
-                  onChange={(e) => setNewModel({ ...newModel, name: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">OpenRouter Model ID</label>
-                <Input
-                  data-testid="input-model-id"
-                  placeholder="e.g. deepseek/deepseek-v3"
-                  value={newModel.modelId}
-                  onChange={(e) => setNewModel({ ...newModel, modelId: e.target.value })}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Find model IDs at openrouter.ai/models
-                </p>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Description</label>
-                <Input
-                  data-testid="input-model-description"
-                  placeholder="Brief description"
-                  value={newModel.description}
-                  onChange={(e) => setNewModel({ ...newModel, description: e.target.value })}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Category</label>
-                  <Select
-                    value={newModel.category}
-                    onValueChange={(v) => setNewModel({ ...newModel, category: v })}
-                  >
-                    <SelectTrigger data-testid="select-model-category">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="general">General</SelectItem>
-                      <SelectItem value="coding">Coding</SelectItem>
-                      <SelectItem value="reasoning">Reasoning</SelectItem>
-                      <SelectItem value="creative">Creative</SelectItem>
-                      <SelectItem value="fast">Fast</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Context Window</label>
-                  <Input
-                    data-testid="input-context-window"
-                    type="number"
-                    value={newModel.contextWindow}
-                    onChange={(e) =>
-                      setNewModel({ ...newModel, contextWindow: parseInt(e.target.value) || 8192 })
-                    }
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Input Cost ($/1M tokens)</label>
-                  <Input
-                    data-testid="input-cost-input"
-                    placeholder="0"
-                    value={newModel.inputCost}
-                    onChange={(e) => setNewModel({ ...newModel, inputCost: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Output Cost ($/1M tokens)</label>
-                  <Input
-                    data-testid="input-cost-output"
-                    placeholder="0"
-                    value={newModel.outputCost}
-                    onChange={(e) => setNewModel({ ...newModel, outputCost: e.target.value })}
-                  />
-                </div>
-              </div>
-              <Button
-                data-testid="button-save-model"
-                onClick={() => addModel.mutate()}
-                disabled={!newModel.name || !newModel.modelId || addModel.isPending}
-                className="w-full"
-              >
-                {addModel.isPending ? "Adding..." : "Add Model"}
+          </a>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button data-testid="button-add-model" size="sm" className="gap-2 text-xs">
+                <Plus className="w-3 h-3" />
+                Add Model
               </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Cpu className="w-4 h-4 text-primary" />
+                  Add OpenRouter Model
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 mt-2">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Display Name</label>
+                  <Input
+                    data-testid="input-model-name"
+                    placeholder="e.g. DeepSeek V3"
+                    value={newModel.name}
+                    onChange={(e) => setNewModel({ ...newModel, name: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">OpenRouter Model ID</label>
+                  <Input
+                    data-testid="input-model-id"
+                    placeholder="e.g. deepseek/deepseek-v3"
+                    value={newModel.modelId}
+                    onChange={(e) => setNewModel({ ...newModel, modelId: e.target.value })}
+                    className="font-mono text-sm"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Copy the exact model ID from openrouter.ai/models
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Description</label>
+                  <Input
+                    data-testid="input-model-description"
+                    placeholder="Brief description of the model"
+                    value={newModel.description}
+                    onChange={(e) => setNewModel({ ...newModel, description: e.target.value })}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Category</label>
+                    <Select value={newModel.category} onValueChange={(v) => setNewModel({ ...newModel, category: v })}>
+                      <SelectTrigger data-testid="select-model-category">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="general">General</SelectItem>
+                        <SelectItem value="coding">Coding</SelectItem>
+                        <SelectItem value="reasoning">Reasoning</SelectItem>
+                        <SelectItem value="creative">Creative</SelectItem>
+                        <SelectItem value="fast">Fast</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Context Window</label>
+                    <Input
+                      data-testid="input-context-window"
+                      type="number"
+                      value={newModel.contextWindow}
+                      onChange={(e) => setNewModel({ ...newModel, contextWindow: parseInt(e.target.value) || 8192 })}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Input $/1M tok</label>
+                    <Input
+                      data-testid="input-cost-input"
+                      placeholder="0"
+                      value={newModel.inputCost}
+                      onChange={(e) => setNewModel({ ...newModel, inputCost: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Output $/1M tok</label>
+                    <Input
+                      data-testid="input-cost-output"
+                      placeholder="0"
+                      value={newModel.outputCost}
+                      onChange={(e) => setNewModel({ ...newModel, outputCost: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <Button
+                  data-testid="button-save-model"
+                  onClick={() => addModel.mutate()}
+                  disabled={!newModel.name || !newModel.modelId || addModel.isPending}
+                  className="w-full gap-2"
+                >
+                  {addModel.isPending ? <><Cpu className="w-4 h-4 animate-spin" /> Adding...</> : <><Plus className="w-4 h-4" /> Add Model</>}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 max-w-sm">
+        <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             data-testid="input-search-models"
             placeholder="Search models..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
+            className="pl-9 h-9 text-sm"
           />
         </div>
-        <Select value={category} onValueChange={setCategory}>
-          <SelectTrigger className="w-[140px]" data-testid="select-filter-category">
-            <SelectValue placeholder="Category" />
-          </SelectTrigger>
-          <SelectContent>
-            {categories.map((cat) => (
-              <SelectItem key={cat} value={cat}>
-                {cat.charAt(0).toUpperCase() + cat.slice(1)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex gap-1.5 flex-wrap">
+          {categories.map((cat) => (
+            <Button
+              key={cat}
+              size="sm"
+              variant={category === cat ? "default" : "outline"}
+              onClick={() => setCategory(cat)}
+              className="text-xs h-8 px-3"
+              data-testid={`filter-category-${cat}`}
+            >
+              {cat.charAt(0).toUpperCase() + cat.slice(1)}
+            </Button>
+          ))}
+        </div>
       </div>
 
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {[1, 2, 3].map((i) => (
             <Card key={i}>
-              <CardContent className="pt-5 space-y-3">
+              <CardContent className="p-4 space-y-3">
                 <div className="h-5 w-32 bg-muted animate-pulse rounded" />
                 <div className="h-4 w-48 bg-muted animate-pulse rounded" />
                 <div className="h-4 w-24 bg-muted animate-pulse rounded" />
@@ -262,92 +282,96 @@ export default function ModelsPage() {
         </div>
       ) : filtered.length === 0 ? (
         <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Bot className="w-12 h-12 text-muted-foreground mb-4" />
-            <p className="text-muted-foreground">
-              {models.length === 0 ? "No models configured. Add your first model." : "No models match your search."}
+          <CardContent className="flex flex-col items-center justify-center py-16">
+            <div className="w-14 h-14 rounded-xl bg-muted/50 flex items-center justify-center mb-4">
+              <Bot className="w-7 h-7 text-muted-foreground" />
+            </div>
+            <p className="text-muted-foreground font-medium">
+              {models.length === 0 ? "No models configured" : "No models match your search"}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {models.length === 0 ? "Add your first AI model to get started" : "Try a different search term"}
             </p>
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((model) => (
-            <Card key={model.id} className="hover-elevate" data-testid={`card-model-${model.id}`}>
-              <CardContent className="pt-5">
-                <div className="flex items-start justify-between gap-2 mb-3">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
-                      <Cpu className="w-4 h-4 text-primary" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {filtered.map((model) => {
+            const catColors = getCategoryColor(model.category);
+            return (
+              <Card key={model.id} className="hover-elevate group" data-testid={`card-model-${model.id}`}>
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className={`w-9 h-9 rounded-lg border flex items-center justify-center shrink-0 ${catColors}`}>
+                        <Cpu className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="font-semibold text-sm truncate" data-testid={`text-model-name-${model.id}`}>
+                          {model.name}
+                        </h3>
+                        <p className="text-[11px] text-muted-foreground font-mono truncate">{model.modelId}</p>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <h3 className="font-semibold text-sm truncate" data-testid={`text-model-name-${model.id}`}>
-                        {model.name}
-                      </h3>
-                      <p className="text-xs text-muted-foreground truncate">{model.modelId}</p>
-                    </div>
+                    <button
+                      data-testid={`button-favorite-${model.id}`}
+                      onClick={() => toggleFavorite.mutate({ id: model.id, isFavorite: !model.isFavorite })}
+                      className="mt-1"
+                    >
+                      {model.isFavorite ? (
+                        <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
+                      ) : (
+                        <StarOff className="w-4 h-4 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
+                      )}
+                    </button>
                   </div>
-                  <button
-                    data-testid={`button-favorite-${model.id}`}
-                    onClick={() =>
-                      toggleFavorite.mutate({ id: model.id, isFavorite: !model.isFavorite })
-                    }
-                  >
-                    {model.isFavorite ? (
-                      <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
-                    ) : (
-                      <StarOff className="w-4 h-4 text-muted-foreground" />
-                    )}
-                  </button>
-                </div>
 
-                {model.description && (
-                  <p className="text-xs text-muted-foreground mb-3 line-clamp-2">
-                    {model.description}
-                  </p>
-                )}
-
-                <div className="flex items-center gap-2 flex-wrap mb-3">
-                  <Badge variant="outline" className="text-xs gap-1">
-                    <Layers className="w-3 h-3" />
-                    {(model.contextWindow || 8192).toLocaleString()}
-                  </Badge>
-                  <Badge variant="outline" className="text-xs gap-1">
-                    <DollarSign className="w-3 h-3" />
-                    {model.inputCost === "0" && model.outputCost === "0" ? "Free" : `$${model.inputCost}`}
-                  </Badge>
-                  {model.category && (
-                    <Badge variant="outline" className="text-xs gap-1">
-                      <Sparkles className="w-3 h-3" />
-                      {model.category}
-                    </Badge>
+                  {model.description && (
+                    <p className="text-xs text-muted-foreground mb-3 line-clamp-2 leading-relaxed">
+                      {model.description}
+                    </p>
                   )}
-                </div>
 
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      data-testid={`switch-model-enabled-${model.id}`}
-                      checked={model.isEnabled}
-                      onCheckedChange={(checked) =>
-                        toggleModel.mutate({ id: model.id, isEnabled: checked })
-                      }
-                    />
-                    <span className="text-xs text-muted-foreground">
-                      {model.isEnabled ? "Active" : "Disabled"}
-                    </span>
+                  <div className="flex items-center gap-1.5 flex-wrap mb-3">
+                    <Badge variant="outline" className="text-[10px] gap-1 h-5 px-1.5">
+                      <Layers className="w-2.5 h-2.5" />
+                      {((model.contextWindow || 8192) / 1000).toFixed(0)}K
+                    </Badge>
+                    <Badge variant="outline" className="text-[10px] gap-1 h-5 px-1.5">
+                      <DollarSign className="w-2.5 h-2.5" />
+                      {model.inputCost === "0" && model.outputCost === "0" ? "Free" : `$${model.inputCost}`}
+                    </Badge>
+                    <Badge variant="outline" className={`text-[10px] gap-1 h-5 px-1.5`}>
+                      <Sparkles className="w-2.5 h-2.5" />
+                      {model.category || "general"}
+                    </Badge>
                   </div>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    data-testid={`button-delete-model-${model.id}`}
-                    onClick={() => deleteModel.mutate(model.id)}
-                  >
-                    <Trash2 className="w-4 h-4 text-destructive" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+
+                  <div className="flex items-center justify-between pt-2 border-t border-border/30">
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        data-testid={`switch-model-enabled-${model.id}`}
+                        checked={model.isEnabled}
+                        onCheckedChange={(checked) => toggleModel.mutate({ id: model.id, isEnabled: checked })}
+                      />
+                      <span className={`text-[11px] ${model.isEnabled ? "text-emerald-500" : "text-muted-foreground"}`}>
+                        {model.isEnabled ? "Active" : "Disabled"}
+                      </span>
+                    </div>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      data-testid={`button-delete-model-${model.id}`}
+                      onClick={() => deleteModel.mutate(model.id)}
+                      className="w-7 h-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
     </div>
