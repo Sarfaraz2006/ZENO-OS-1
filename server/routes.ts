@@ -233,8 +233,8 @@ export async function registerRoutes(
       const execAsync = promisify(exec);
 
       const result = await execAsync(command, {
-        timeout: 10000,
-        maxBuffer: 1024 * 512,
+        timeout: 30000,
+        maxBuffer: 1024 * 1024,
         cwd: process.cwd(),
       });
 

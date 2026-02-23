@@ -26,7 +26,7 @@ export default function TerminalPage() {
     {
       id: 0,
       type: "system",
-      content: "J.A.R.V.I.S Terminal v1.0 — Type a command or ask AI to execute tasks.\nType 'help' for available commands. Type 'clear' to clear screen.",
+      content: "J.A.R.V.I.S Terminal v1.0 — Real system terminal\nExecute any command: ls, pwd, cat, node, npm, python3, git, curl, etc.\nType 'help' for more info. Type 'clear' to clear screen.",
       timestamp: new Date(),
     },
   ]);
@@ -79,16 +79,27 @@ export default function TerminalPage() {
 
     if (trimmed === "help") {
       addEntry("system",
-        `Available commands:
-  help        - Show this help message
-  clear       - Clear terminal screen
-  time        - Show current date and time
-  whoami      - Show current user info
-  status      - Show system status
-  models      - List configured AI models
-  version     - Show platform version
+        `This is a real system terminal. Any valid Linux command will execute on the server.
 
-Any other input will be processed by the AI assistant or executed as a system command.`
+Built-in shortcuts:
+  help        Show this help
+  clear       Clear screen
+  time        Current date/time
+  whoami      Current user
+  status      System status
+  version     Platform version
+
+Common commands you can run:
+  ls, pwd, cat, head, tail     File operations
+  node -e "..."                Run JavaScript
+  python3 -c "..."             Run Python
+  npm list, pip list           Package info
+  git status, git log          Git operations
+  curl, wget                   Network requests
+  grep, find, wc               Search & analysis
+  echo, env, which             System info
+
+Blocked (security): rm, rmdir, kill, shutdown, sudo, su, chmod, chown`
       );
       return true;
     }
@@ -104,13 +115,19 @@ Any other input will be processed by the AI assistant or executed as a system co
     }
 
     if (trimmed === "version") {
-      addEntry("output", "J.A.R.V.I.S Platform v1.0.0\nRuntime: Node.js + React\nAI: OpenRouter Multi-Model");
+      addEntry("output", "J.A.R.V.I.S Platform v1.0.0\nRuntime: Node.js + React + TypeScript\nBackend: Express.js + PostgreSQL\nAI: OpenRouter Multi-Model\nTerminal: Real Linux shell");
+      return true;
+    }
+
+    if (trimmed === "models") {
+      executeCommand.mutate("curl -s http://localhost:5000/api/models | node -e \"process.stdin.on('data',d=>{const m=JSON.parse(d);m.forEach(x=>console.log(x.name+' ('+x.modelId+') - '+(x.isEnabled?'enabled':'disabled')))})\"");
       return true;
     }
 
     if (trimmed === "status") {
       addEntry("output",
         `System Status: ONLINE
+
 AI Engine: Connected (OpenRouter)
 Database: PostgreSQL Active
 Auth: Session Active
