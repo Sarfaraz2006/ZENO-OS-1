@@ -68,8 +68,9 @@ A comprehensive Jarvis-like AI assistant platform with Lovable-style code genera
 23. Auto-preview: when AI generates HTML, preview panel opens automatically
 24. **Email System** - Send via SMTP, receive via IMAP, reply functionality
 25. **Business Board** - Email inbox/outbox tracking, contact management, WhatsApp/Payment/n8n analytics
-26. **Integration stubs** - WhatsApp (Twilio), Stripe payments, n8n webhook ready
-27. **n8n Webhook** - POST /api/business/webhook/n8n for automation tracking
+26. **WhatsApp Integration** - Manual Twilio credentials (SID, Auth Token, Phone) - user dismissed Replit OAuth
+27. **Stripe Integration** - Manual API key entry (Secret Key, Webhook Secret) - user dismissed Replit OAuth
+28. **n8n Webhook** - POST /api/business/webhook/n8n - status shows "Not Tested" until first webhook received
 
 ## Business Board
 - Overview tab: Email/WhatsApp/Payment/Automation stat cards, email activity chart, channel distribution pie chart, integration status cards, recent emails

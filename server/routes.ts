@@ -739,39 +739,32 @@ export async function registerRoutes(
 
   app.post("/api/integrations/connect", requireAuth, async (req, res) => {
     try {
-      const { service } = req.body;
+      const { service, credentials } = req.body;
       if (!service) return res.status(400).json({ error: "Service name required" });
 
       if (service === "twilio") {
-        await storage.upsertSetting("twilio_connected", "pending");
-        await storage.createLog({ action: "Twilio connection requested", details: "WhatsApp integration", source: "integration" });
-        return res.json({ 
-          success: true, 
-          status: "pending",
-          message: "Twilio connection requires OAuth setup. The Replit integration will guide you through the process.",
-          instructions: [
-            "1. Click the 'Connect Twilio' button that will appear in the Replit panel",
-            "2. Sign in to your Twilio account", 
-            "3. Authorize the connection",
-            "4. Once connected, WhatsApp features will be enabled"
-          ]
-        });
+        if (!credentials?.sid || !credentials?.authToken || !credentials?.phoneNumber) {
+          return res.status(400).json({ error: "Account SID, Auth Token, and Phone Number are required" });
+        }
+        await storage.upsertSetting("twilio_sid", credentials.sid);
+        await storage.upsertSetting("twilio_auth_token", credentials.authToken);
+        await storage.upsertSetting("twilio_phone", credentials.phoneNumber);
+        await storage.upsertSetting("twilio_connected", "true");
+        await storage.createLog({ action: "Twilio connected", details: "WhatsApp integration configured", source: "integration" });
+        return res.json({ success: true, message: "Twilio credentials saved. WhatsApp integration is now active." });
       }
 
       if (service === "stripe") {
-        await storage.upsertSetting("stripe_connected", "pending");
-        await storage.createLog({ action: "Stripe connection requested", details: "Payment integration", source: "integration" });
-        return res.json({ 
-          success: true, 
-          status: "pending",
-          message: "Stripe connection requires OAuth setup. The Replit integration will guide you through the process.",
-          instructions: [
-            "1. Click the 'Connect Stripe' button that will appear in the Replit panel",
-            "2. Sign in to your Stripe account",
-            "3. Authorize the connection", 
-            "4. Once connected, payment tracking will be enabled"
-          ]
-        });
+        if (!credentials?.secretKey) {
+          return res.status(400).json({ error: "Secret Key is required" });
+        }
+        await storage.upsertSetting("stripe_secret_key", credentials.secretKey);
+        if (credentials.webhookSecret) {
+          await storage.upsertSetting("stripe_webhook_secret", credentials.webhookSecret);
+        }
+        await storage.upsertSetting("stripe_connected", "true");
+        await storage.createLog({ action: "Stripe connected", details: "Payment integration configured", source: "integration" });
+        return res.json({ success: true, message: "Stripe credentials saved. Payment tracking is now active." });
       }
 
       res.status(400).json({ error: `Unknown service: ${service}` });

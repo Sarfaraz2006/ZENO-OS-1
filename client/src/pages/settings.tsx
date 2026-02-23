@@ -643,75 +643,9 @@ function IntegrationsSection() {
             )}
           </div>
 
-          <div className="p-3 rounded-lg border border-border/30" data-testid="integration-whatsapp">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                  <MessageCircle className="w-4 h-4 text-emerald-500" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium">WhatsApp Business</p>
-                  <p className="text-[11px] text-muted-foreground">Send & receive via Twilio API</p>
-                </div>
-              </div>
-              {statusBadge(status?.whatsapp.connected ?? false, status?.whatsapp.label ?? "Not Connected")}
-            </div>
-            {!status?.whatsapp.connected && (
-              <div className="mt-2 ml-11 space-y-2">
-                <p className="text-[11px] text-muted-foreground">
-                  Twilio integration is available. Connect your Twilio account to enable WhatsApp messaging.
-                </p>
-                <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1.5" onClick={async () => {
-                  try {
-                    const res = await apiRequest("POST", "/api/integrations/connect", { service: "twilio" });
-                    const data = await res.json();
-                    queryClient.invalidateQueries({ queryKey: ["/api/integrations/status"] });
-                    toast({ title: "Twilio Setup", description: data.message });
-                  } catch (e: any) {
-                    toast({ title: "Connection failed", description: e.message, variant: "destructive" });
-                  }
-                }} data-testid="button-connect-twilio">
-                  <ExternalLink className="w-3 h-3" />
-                  Connect Twilio
-                </Button>
-              </div>
-            )}
-          </div>
+          <WhatsAppIntegration connected={status?.whatsapp.connected ?? false} label={status?.whatsapp.label ?? "Not Connected"} statusBadge={statusBadge} />
 
-          <div className="p-3 rounded-lg border border-border/30" data-testid="integration-stripe">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center">
-                  <DollarSign className="w-4 h-4 text-violet-500" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium">Stripe Payments</p>
-                  <p className="text-[11px] text-muted-foreground">Track invoices & payments</p>
-                </div>
-              </div>
-              {statusBadge(status?.stripe.connected ?? false, status?.stripe.label ?? "Not Connected")}
-            </div>
-            {!status?.stripe.connected && (
-              <div className="mt-2 ml-11 space-y-2">
-                <p className="text-[11px] text-muted-foreground">
-                  Stripe integration is available. Connect your Stripe account to track payments and invoices.
-                </p>
-                <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1.5" onClick={async () => {
-                  try {
-                    const res = await apiRequest("POST", "/api/integrations/connect", { service: "stripe" });
-                    const data = await res.json();
-                    queryClient.invalidateQueries({ queryKey: ["/api/integrations/status"] });
-                    toast({ title: "Stripe Setup", description: data.message });
-                  } catch (e: any) {
-                    toast({ title: "Connection failed", description: e.message, variant: "destructive" });
-                  }
-                }} data-testid="button-connect-stripe">
-                  <ExternalLink className="w-3 h-3" />
-                  Connect Stripe
-                </Button>
-              </div>
-            )}
-          </div>
+          <StripeIntegration connected={status?.stripe.connected ?? false} label={status?.stripe.label ?? "Not Connected"} statusBadge={statusBadge} />
 
           <div className="p-3 rounded-lg border border-border/30" data-testid="integration-n8n">
             <div className="flex items-center justify-between">
@@ -767,5 +701,144 @@ function IntegrationsSection() {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function WhatsAppIntegration({ connected, label, statusBadge }: { connected: boolean; label: string; statusBadge: (c: boolean, l: string) => JSX.Element }) {
+  const { toast } = useToast();
+  const [expanded, setExpanded] = useState(false);
+  const [sid, setSid] = useState("");
+  const [authToken, setAuthToken] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+
+  const saveTwilio = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", "/api/integrations/connect", {
+        service: "twilio", credentials: { sid, authToken, phoneNumber },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/integrations/status"] });
+      setExpanded(false);
+      toast({ title: "Twilio credentials saved!" });
+    },
+    onError: (e: Error) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <div className="p-3 rounded-lg border border-border/30" data-testid="integration-whatsapp">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+            <MessageCircle className="w-4 h-4 text-emerald-500" />
+          </div>
+          <div>
+            <p className="text-sm font-medium">WhatsApp Business</p>
+            <p className="text-[11px] text-muted-foreground">Send & receive via Twilio API</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {!connected && (
+            <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => setExpanded(!expanded)} data-testid="button-setup-twilio">
+              {expanded ? "Hide" : "Setup"}
+            </Button>
+          )}
+          {statusBadge(connected, label)}
+        </div>
+      </div>
+      {expanded && !connected && (
+        <div className="mt-3 ml-11 space-y-3">
+          <p className="text-[11px] text-muted-foreground">
+            Enter your Twilio credentials. Get them from{" "}
+            <a href="https://console.twilio.com" target="_blank" rel="noopener noreferrer" className="text-primary underline">console.twilio.com</a>
+          </p>
+          <div className="grid gap-2">
+            <div className="space-y-1">
+              <label className="text-[11px] text-muted-foreground">Account SID</label>
+              <Input data-testid="input-twilio-sid" placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" value={sid} onChange={(e) => setSid(e.target.value)} className="h-8 text-xs font-mono" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[11px] text-muted-foreground">Auth Token</label>
+              <Input data-testid="input-twilio-token" type="password" placeholder="••••••••••••••••" value={authToken} onChange={(e) => setAuthToken(e.target.value)} className="h-8 text-xs" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[11px] text-muted-foreground">WhatsApp Phone Number</label>
+              <Input data-testid="input-twilio-phone" placeholder="+1234567890" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} className="h-8 text-xs" />
+            </div>
+          </div>
+          <Button size="sm" className="gap-2 text-xs w-full" disabled={!sid || !authToken || !phoneNumber || saveTwilio.isPending} onClick={() => saveTwilio.mutate()} data-testid="button-save-twilio">
+            {saveTwilio.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+            Save Twilio Credentials
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StripeIntegration({ connected, label, statusBadge }: { connected: boolean; label: string; statusBadge: (c: boolean, l: string) => JSX.Element }) {
+  const { toast } = useToast();
+  const [expanded, setExpanded] = useState(false);
+  const [secretKey, setSecretKey] = useState("");
+  const [webhookSecret, setWebhookSecret] = useState("");
+
+  const saveStripe = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", "/api/integrations/connect", {
+        service: "stripe", credentials: { secretKey, webhookSecret },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/integrations/status"] });
+      setExpanded(false);
+      toast({ title: "Stripe credentials saved!" });
+    },
+    onError: (e: Error) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <div className="p-3 rounded-lg border border-border/30" data-testid="integration-stripe">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center">
+            <DollarSign className="w-4 h-4 text-violet-500" />
+          </div>
+          <div>
+            <p className="text-sm font-medium">Stripe Payments</p>
+            <p className="text-[11px] text-muted-foreground">Track invoices & payments</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {!connected && (
+            <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => setExpanded(!expanded)} data-testid="button-setup-stripe">
+              {expanded ? "Hide" : "Setup"}
+            </Button>
+          )}
+          {statusBadge(connected, label)}
+        </div>
+      </div>
+      {expanded && !connected && (
+        <div className="mt-3 ml-11 space-y-3">
+          <p className="text-[11px] text-muted-foreground">
+            Enter your Stripe API keys. Get them from{" "}
+            <a href="https://dashboard.stripe.com/apikeys" target="_blank" rel="noopener noreferrer" className="text-primary underline">dashboard.stripe.com</a>
+          </p>
+          <div className="grid gap-2">
+            <div className="space-y-1">
+              <label className="text-[11px] text-muted-foreground">Secret Key</label>
+              <Input data-testid="input-stripe-key" type="password" placeholder="sk_live_xxxxx or sk_test_xxxxx" value={secretKey} onChange={(e) => setSecretKey(e.target.value)} className="h-8 text-xs font-mono" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[11px] text-muted-foreground">Webhook Secret (optional)</label>
+              <Input data-testid="input-stripe-webhook" type="password" placeholder="whsec_xxxxx" value={webhookSecret} onChange={(e) => setWebhookSecret(e.target.value)} className="h-8 text-xs font-mono" />
+            </div>
+          </div>
+          <Button size="sm" className="gap-2 text-xs w-full" disabled={!secretKey || saveStripe.isPending} onClick={() => saveStripe.mutate()} data-testid="button-save-stripe">
+            {saveStripe.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+            Save Stripe Credentials
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }
