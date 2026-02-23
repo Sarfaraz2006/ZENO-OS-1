@@ -40,8 +40,6 @@ import {
   Check,
   Download,
   Settings2,
-  Eye,
-  X,
 } from "lucide-react";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
 import { CodePreview } from "@/components/code-preview";
@@ -70,6 +68,7 @@ When the user asks you to build, create, or generate any web page, website, land
 - Make the output visually impressive and professional
 - Always wrap the full code in a single \`\`\`html code block so it can be previewed
 - Include proper meta tags, viewport settings, and a complete HTML structure
+- Keep explanation text minimal - focus on delivering the code
 
 When the user asks for code in any language, use proper markdown code blocks with language tags.
 When explaining concepts, use markdown formatting (headers, lists, bold, etc.) for clarity.`;
@@ -197,7 +196,7 @@ export default function ChatPage() {
     if (!voiceEnabled) return;
     window.speechSynthesis.cancel();
     const plainText = text.replace(/```[\s\S]*?```/g, "Code block.").replace(/[#*`_~]/g, "");
-    const u = new SpeechSynthesisUtterance(plainText);
+    const u = new SpeechSynthesisUtterance(plainText.slice(0, 500));
     u.rate = 1;
     u.pitch = 1;
     u.onend = () => {
@@ -256,7 +255,13 @@ export default function ChatPage() {
                   fullResponse += data.content;
                   setStreamingContent(fullResponse);
                 }
-                if (data.done) speakText(fullResponse);
+                if (data.done) {
+                  speakText(fullResponse);
+                  const htmlMatch = fullResponse.match(/```html\n([\s\S]*?)```/);
+                  if (htmlMatch) {
+                    setPreviewCode({ code: htmlMatch[1], language: "html" });
+                  }
+                }
               } catch {}
             }
           }
@@ -305,16 +310,6 @@ export default function ChatPage() {
   const displayMessages = activeChat?.messages || [];
   const currentModel = enabledModels.find(m => m.modelId === selectedModel);
 
-  if (previewCode) {
-    return (
-      <CodePreview
-        code={previewCode.code}
-        language={previewCode.language}
-        onClose={() => setPreviewCode(null)}
-      />
-    );
-  }
-
   return (
     <div className="flex h-full">
       {showSidebar && (
@@ -322,7 +317,10 @@ export default function ChatPage() {
           <div className="p-3 flex items-center gap-2">
             <Button
               data-testid="button-new-chat"
-              onClick={() => createConversation.mutate()}
+              onClick={() => {
+                createConversation.mutate();
+                setPreviewCode(null);
+              }}
               className="flex-1 gap-2"
               size="sm"
             >
@@ -349,7 +347,10 @@ export default function ChatPage() {
                       ? "bg-primary/10 text-primary font-medium"
                       : "text-muted-foreground"
                   }`}
-                  onClick={() => setActiveConversation(conv.id)}
+                  onClick={() => {
+                    setActiveConversation(conv.id);
+                    setPreviewCode(null);
+                  }}
                 >
                   <MessageSquare className="w-3.5 h-3.5 shrink-0" />
                   <span className="truncate flex-1 text-xs">{conv.title}</span>
@@ -376,330 +377,341 @@ export default function ChatPage() {
         </div>
       )}
 
-      <div className="flex-1 flex flex-col min-w-0">
-        <div className="border-b border-border/30 px-3 py-2 flex items-center justify-between gap-2 h-12 shrink-0">
-          <div className="flex items-center gap-2">
-            {!showSidebar && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button size="icon" variant="ghost" onClick={() => setShowSidebar(true)} data-testid="button-show-chat-sidebar">
-                    <PanelLeftOpen className="w-4 h-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Show sidebar</TooltipContent>
-              </Tooltip>
-            )}
-            <Select value={selectedModel} onValueChange={setSelectedModel}>
-              <SelectTrigger className="w-[220px] h-8 text-xs" data-testid="select-model">
-                <SelectValue placeholder="Select model" />
-              </SelectTrigger>
-              <SelectContent>
-                {enabledModels.map((model) => (
-                  <SelectItem key={model.id} value={model.modelId} data-testid={`model-option-${model.id}`}>
-                    <span className="flex items-center gap-2 text-xs">
-                      <Cpu className="w-3 h-3 text-muted-foreground" />
-                      {model.name}
-                    </span>
-                  </SelectItem>
-                ))}
-                {enabledModels.length === 0 && (
-                  <SelectItem value="meta-llama/llama-3.3-70b-instruct">
-                    Llama 3.3 70B (default)
-                  </SelectItem>
-                )}
-              </SelectContent>
-            </Select>
-            {currentModel && (
-              <Badge variant="outline" className="text-[10px] hidden md:flex">
-                {currentModel.inputCost === "0" ? "Free" : `$${currentModel.inputCost}/M`}
-              </Badge>
-            )}
-          </div>
-          <div className="flex items-center gap-1">
-            <Dialog open={showSystemPrompt} onOpenChange={setShowSystemPrompt}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <DialogTrigger asChild>
-                    <Button size="icon" variant="ghost" data-testid="button-system-prompt">
-                      <Settings2 className="w-4 h-4" />
+      <div className={`flex-1 flex min-w-0 ${previewCode ? "" : ""}`}>
+        <div className={`flex flex-col min-w-0 ${previewCode ? "w-[45%] shrink-0" : "flex-1"}`}>
+          <div className="border-b border-border/30 px-3 py-2 flex items-center justify-between gap-2 h-12 shrink-0">
+            <div className="flex items-center gap-2">
+              {!showSidebar && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button size="icon" variant="ghost" onClick={() => setShowSidebar(true)} data-testid="button-show-chat-sidebar">
+                      <PanelLeftOpen className="w-4 h-4" />
                     </Button>
-                  </DialogTrigger>
-                </TooltipTrigger>
-                <TooltipContent>System prompt</TooltipContent>
-              </Tooltip>
-              <DialogContent className="max-w-lg">
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2">
-                    <Settings2 className="w-4 h-4 text-primary" />
-                    System Prompt
-                  </DialogTitle>
-                </DialogHeader>
-                <div className="space-y-3 mt-2">
-                  <p className="text-xs text-muted-foreground">
-                    Customize how the AI behaves. This prompt is sent with every message.
-                  </p>
-                  <Textarea
-                    data-testid="textarea-system-prompt"
-                    value={systemPrompt}
-                    onChange={(e) => setSystemPrompt(e.target.value)}
-                    rows={10}
-                    className="text-xs font-mono"
-                  />
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-xs"
-                      onClick={() => setSystemPrompt(DEFAULT_SYSTEM_PROMPT)}
-                      data-testid="button-reset-system-prompt"
-                    >
-                      Reset to Default
-                    </Button>
-                    <Button
-                      size="sm"
-                      className="text-xs"
-                      onClick={() => setShowSystemPrompt(false)}
-                      data-testid="button-save-system-prompt"
-                    >
-                      Save
-                    </Button>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-
-            {activeChat && activeChat.messages && activeChat.messages.length > 0 && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button size="icon" variant="ghost" onClick={exportConversation} data-testid="button-export-chat">
-                    <Download className="w-4 h-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Export conversation</TooltipContent>
-              </Tooltip>
-            )}
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  size="icon"
-                  variant={continuousMode ? "default" : "ghost"}
-                  onClick={() => setContinuousMode(!continuousMode)}
-                  data-testid="button-continuous-mode"
-                >
-                  <Sparkles className="w-4 h-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                {continuousMode ? "Continuous mode ON" : "Enable continuous voice mode"}
-              </TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  size="icon"
-                  variant={voiceEnabled ? "default" : "ghost"}
-                  onClick={() => setVoiceEnabled(!voiceEnabled)}
-                  data-testid="button-toggle-voice"
-                >
-                  {voiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                {voiceEnabled ? "Voice output ON" : "Enable voice output"}
-              </TooltipContent>
-            </Tooltip>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto">
-          {displayMessages.length === 0 && !streamingContent ? (
-            <div className="flex flex-col items-center justify-center h-full gap-6 px-4">
-              <div className="relative">
-                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary/15 to-primary/5 border border-primary/20 flex items-center justify-center">
-                  <Sparkles className="w-10 h-10 text-primary" />
-                </div>
-                <div className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-primary animate-pulse" />
-              </div>
-              <div className="text-center max-w-md">
-                <h2 className="text-xl font-semibold mb-2">What shall I build for you?</h2>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  I can build websites, write code, analyze data, and more. Ask me to create anything and see a live preview.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2 justify-center max-w-lg">
-                {[
-                  "Build a cafe landing page",
-                  "Create a portfolio website",
-                  "Design a pricing table",
-                  "Build a login form",
-                  "Write a Python API",
-                  "Explain React hooks",
-                ].map((suggestion) => (
-                  <Badge
-                    key={suggestion}
-                    variant="outline"
-                    className="cursor-pointer py-1.5 px-3 text-xs"
-                    onClick={() => {
-                      setInput(suggestion);
-                      textareaRef.current?.focus();
-                    }}
-                    data-testid={`badge-suggestion-${suggestion.toLowerCase().replace(/\s/g, "-")}`}
-                  >
-                    {suggestion}
-                  </Badge>
-                ))}
-              </div>
+                  </TooltipTrigger>
+                  <TooltipContent>Show sidebar</TooltipContent>
+                </Tooltip>
+              )}
+              <Select value={selectedModel} onValueChange={setSelectedModel}>
+                <SelectTrigger className="w-[180px] h-8 text-xs" data-testid="select-model">
+                  <SelectValue placeholder="Select model" />
+                </SelectTrigger>
+                <SelectContent>
+                  {enabledModels.map((model) => (
+                    <SelectItem key={model.id} value={model.modelId} data-testid={`model-option-${model.id}`}>
+                      <span className="flex items-center gap-2 text-xs">
+                        <Cpu className="w-3 h-3 text-muted-foreground" />
+                        {model.name}
+                      </span>
+                    </SelectItem>
+                  ))}
+                  {enabledModels.length === 0 && (
+                    <SelectItem value="meta-llama/llama-3.3-70b-instruct">
+                      Llama 3.3 70B (default)
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+              {currentModel && (
+                <Badge variant="outline" className="text-[10px] hidden md:flex">
+                  {currentModel.inputCost === "0" ? "Free" : `$${currentModel.inputCost}/M`}
+                </Badge>
+              )}
             </div>
-          ) : (
-            <div className="max-w-3xl mx-auto py-4 px-4 space-y-1">
-              {displayMessages.map((msg) => (
-                <div
-                  key={msg.id}
-                  data-testid={`message-${msg.id}`}
-                  className="flex gap-3 py-4"
-                >
-                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
-                    msg.role === "user"
-                      ? "bg-secondary"
-                      : "bg-primary/10 border border-primary/20"
-                  }`}>
-                    {msg.role === "user" ? (
-                      <User className="w-3.5 h-3.5" />
-                    ) : (
-                      <Bot className="w-3.5 h-3.5 text-primary" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs font-medium">
-                        {msg.role === "user" ? "You" : "Jarvis"}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground font-mono">
-                        {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                      </span>
+            <div className="flex items-center gap-1">
+              <Dialog open={showSystemPrompt} onOpenChange={setShowSystemPrompt}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DialogTrigger asChild>
+                      <Button size="icon" variant="ghost" data-testid="button-system-prompt">
+                        <Settings2 className="w-4 h-4" />
+                      </Button>
+                    </DialogTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent>System prompt</TooltipContent>
+                </Tooltip>
+                <DialogContent className="max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <Settings2 className="w-4 h-4 text-primary" />
+                      System Prompt
+                    </DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-3 mt-2">
+                    <p className="text-xs text-muted-foreground">
+                      Customize how the AI behaves. This prompt is sent with every message.
+                    </p>
+                    <Textarea
+                      data-testid="textarea-system-prompt"
+                      value={systemPrompt}
+                      onChange={(e) => setSystemPrompt(e.target.value)}
+                      rows={10}
+                      className="text-xs font-mono"
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs"
+                        onClick={() => setSystemPrompt(DEFAULT_SYSTEM_PROMPT)}
+                        data-testid="button-reset-system-prompt"
+                      >
+                        Reset to Default
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="text-xs"
+                        onClick={() => setShowSystemPrompt(false)}
+                        data-testid="button-save-system-prompt"
+                      >
+                        Save
+                      </Button>
                     </div>
-                    <div className="text-sm leading-relaxed">
-                      {msg.role === "assistant" ? (
-                        <MarkdownRenderer content={msg.content} onPreview={handlePreview} />
+                  </div>
+                </DialogContent>
+              </Dialog>
+
+              {activeChat && activeChat.messages && activeChat.messages.length > 0 && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button size="icon" variant="ghost" onClick={exportConversation} data-testid="button-export-chat">
+                      <Download className="w-4 h-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Export conversation</TooltipContent>
+                </Tooltip>
+              )}
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="icon"
+                    variant={continuousMode ? "default" : "ghost"}
+                    onClick={() => setContinuousMode(!continuousMode)}
+                    data-testid="button-continuous-mode"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {continuousMode ? "Continuous mode ON" : "Enable continuous voice mode"}
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="icon"
+                    variant={voiceEnabled ? "default" : "ghost"}
+                    onClick={() => setVoiceEnabled(!voiceEnabled)}
+                    data-testid="button-toggle-voice"
+                  >
+                    {voiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {voiceEnabled ? "Voice output ON" : "Enable voice output"}
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto">
+            {displayMessages.length === 0 && !streamingContent ? (
+              <div className="flex flex-col items-center justify-center h-full gap-6 px-4">
+                <div className="relative">
+                  <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary/15 to-primary/5 border border-primary/20 flex items-center justify-center">
+                    <Sparkles className="w-10 h-10 text-primary" />
+                  </div>
+                  <div className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-primary animate-pulse" />
+                </div>
+                <div className="text-center max-w-md">
+                  <h2 className="text-xl font-semibold mb-2" data-testid="text-chat-welcome">What shall I build for you?</h2>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    Ask me to create any website, UI or code. I'll generate it and show you a live preview.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2 justify-center max-w-lg">
+                  {[
+                    "Build a cafe landing page",
+                    "Create a portfolio website",
+                    "Design a pricing table",
+                    "Build a login form",
+                  ].map((suggestion) => (
+                    <Badge
+                      key={suggestion}
+                      variant="outline"
+                      className="cursor-pointer py-1.5 px-3 text-xs hover:bg-muted/50 transition-colors"
+                      onClick={() => {
+                        setInput(suggestion);
+                        inputRef.current = suggestion;
+                        textareaRef.current?.focus();
+                      }}
+                      data-testid={`badge-suggestion-${suggestion.toLowerCase().replace(/\s/g, "-")}`}
+                    >
+                      {suggestion}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="max-w-3xl mx-auto py-4 px-4 space-y-1">
+                {displayMessages.map((msg) => (
+                  <div
+                    key={msg.id}
+                    data-testid={`message-${msg.id}`}
+                    className="flex gap-3 py-4"
+                  >
+                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
+                      msg.role === "user"
+                        ? "bg-secondary"
+                        : "bg-primary/10 border border-primary/20"
+                    }`}>
+                      {msg.role === "user" ? (
+                        <User className="w-3.5 h-3.5" />
                       ) : (
-                        <div className="whitespace-pre-wrap break-words">{msg.content}</div>
+                        <Bot className="w-3.5 h-3.5 text-primary" />
                       )}
                     </div>
-                    {msg.role === "assistant" && (
-                      <div className="mt-2 flex items-center gap-1">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-6 px-2 text-[10px] text-muted-foreground gap-1"
-                          onClick={() => copyMessage(msg.id, msg.content)}
-                          data-testid={`button-copy-message-${msg.id}`}
-                        >
-                          {copiedId === msg.id ? (
-                            <><Check className="w-3 h-3" /> Copied</>
-                          ) : (
-                            <><Copy className="w-3 h-3" /> Copy</>
-                          )}
-                        </Button>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-medium">
+                          {msg.role === "user" ? "You" : "Jarvis"}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground font-mono">
+                          {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        </span>
                       </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-
-              {streamingContent && (
-                <div className="flex gap-3 py-4">
-                  <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 mt-0.5">
-                    <Bot className="w-3.5 h-3.5 text-primary animate-pulse" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs font-medium">Jarvis</span>
-                      <Badge variant="outline" className="text-[10px] gap-1 h-4 px-1.5 animate-pulse">
-                        <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                        Generating
-                      </Badge>
+                      <div className="text-sm leading-relaxed">
+                        {msg.role === "assistant" ? (
+                          <MarkdownRenderer content={msg.content} onPreview={handlePreview} />
+                        ) : (
+                          <div className="whitespace-pre-wrap break-words">{msg.content}</div>
+                        )}
+                      </div>
+                      {msg.role === "assistant" && (
+                        <div className="mt-2 flex items-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 px-2 text-[10px] text-muted-foreground gap-1"
+                            onClick={() => copyMessage(msg.id, msg.content)}
+                            data-testid={`button-copy-message-${msg.id}`}
+                          >
+                            {copiedId === msg.id ? (
+                              <><Check className="w-3 h-3" /> Copied</>
+                            ) : (
+                              <><Copy className="w-3 h-3" /> Copy</>
+                            )}
+                          </Button>
+                        </div>
+                      )}
                     </div>
-                    <div className="text-sm leading-relaxed">
-                      <MarkdownRenderer content={streamingContent} onPreview={handlePreview} />
+                  </div>
+                ))}
+
+                {streamingContent && (
+                  <div className="flex gap-3 py-4">
+                    <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 mt-0.5">
+                      <Bot className="w-3.5 h-3.5 text-primary animate-pulse" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-medium">Jarvis</span>
+                        <Badge variant="outline" className="text-[10px] gap-1 h-4 px-1.5 animate-pulse">
+                          <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                          Generating
+                        </Badge>
+                      </div>
+                      <div className="text-sm leading-relaxed">
+                        <MarkdownRenderer content={streamingContent} onPreview={handlePreview} />
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {isStreaming && !streamingContent && (
-                <div className="flex gap-3 py-4">
-                  <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
-                    <Bot className="w-3.5 h-3.5 text-primary animate-pulse" />
+                {isStreaming && !streamingContent && (
+                  <div className="flex gap-3 py-4">
+                    <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                      <Bot className="w-3.5 h-3.5 text-primary animate-pulse" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                      <span className="text-sm text-muted-foreground">Thinking...</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                    <span className="text-sm text-muted-foreground">Thinking...</span>
-                  </div>
-                </div>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-          )}
-        </div>
-
-        <div className="border-t border-border/30 p-3 md:p-4">
-          <div className="max-w-3xl mx-auto">
-            <div className="relative bg-card border border-border/50 rounded-xl p-1">
-              <Textarea
-                ref={textareaRef}
-                data-testid="input-chat-message"
-                placeholder={isListening ? "Listening..." : "Ask me to build something..."}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                disabled={isStreaming}
-                className="resize-none border-0 focus-visible:ring-0 text-sm min-h-[44px] max-h-[160px] bg-transparent"
-                rows={1}
-              />
-              <div className="flex items-center justify-between px-2 pb-1">
-                <div className="flex items-center gap-1">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        size="icon"
-                        variant={isListening ? "default" : "ghost"}
-                        onClick={toggleListening}
-                        data-testid="button-mic"
-                        className={`w-8 h-8 ${isListening ? "animate-pulse" : ""}`}
-                      >
-                        {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>{isListening ? "Stop" : "Voice input"}</TooltipContent>
-                  </Tooltip>
-                </div>
-                <Button
-                  data-testid="button-send-message"
-                  onClick={() => handleSendMessage()}
-                  disabled={!input.trim() || isStreaming}
-                  size="sm"
-                  className="gap-1.5 h-8"
-                >
-                  {isStreaming ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Send className="w-3.5 h-3.5" />
-                  )}
-                  Send
-                </Button>
-              </div>
-            </div>
-            {continuousMode && (
-              <div className="flex items-center justify-center gap-2 mt-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <p className="text-[11px] text-muted-foreground">
-                  Continuous conversation mode - auto-listens after response
-                </p>
+                )}
+                <div ref={messagesEndRef} />
               </div>
             )}
           </div>
+
+          <div className="border-t border-border/30 p-3 md:p-4">
+            <div className="max-w-3xl mx-auto">
+              <div className="relative bg-card border border-border/50 rounded-xl p-1">
+                <Textarea
+                  ref={textareaRef}
+                  data-testid="input-chat-message"
+                  placeholder={isListening ? "Listening..." : "Ask me to build something..."}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  disabled={isStreaming}
+                  className="resize-none border-0 focus-visible:ring-0 text-sm min-h-[44px] max-h-[160px] bg-transparent"
+                  rows={1}
+                />
+                <div className="flex items-center justify-between px-2 pb-1">
+                  <div className="flex items-center gap-1">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          size="icon"
+                          variant={isListening ? "default" : "ghost"}
+                          onClick={toggleListening}
+                          data-testid="button-mic"
+                          className={`w-8 h-8 ${isListening ? "animate-pulse" : ""}`}
+                        >
+                          {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>{isListening ? "Stop" : "Voice input"}</TooltipContent>
+                    </Tooltip>
+                  </div>
+                  <Button
+                    data-testid="button-send-message"
+                    onClick={() => handleSendMessage()}
+                    disabled={!input.trim() || isStreaming}
+                    size="sm"
+                    className="gap-1.5 h-8"
+                  >
+                    {isStreaming ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Send className="w-3.5 h-3.5" />
+                    )}
+                    Send
+                  </Button>
+                </div>
+              </div>
+              {continuousMode && (
+                <div className="flex items-center justify-center gap-2 mt-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <p className="text-[11px] text-muted-foreground">
+                    Continuous conversation mode - auto-listens after response
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
+
+        {previewCode && (
+          <div className="flex-1 min-w-0">
+            <CodePreview
+              code={previewCode.code}
+              language={previewCode.language}
+              onClose={() => setPreviewCode(null)}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

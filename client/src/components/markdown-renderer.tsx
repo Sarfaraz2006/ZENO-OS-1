@@ -3,7 +3,7 @@ import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Button } from "@/components/ui/button";
-import { Copy, Check, Eye } from "lucide-react";
+import { Copy, Check, Eye, Code2, ChevronDown, ChevronRight } from "lucide-react";
 import { useState, useCallback } from "react";
 
 interface MarkdownRendererProps {
@@ -11,7 +11,7 @@ interface MarkdownRendererProps {
   onPreview?: (code: string, language: string) => void;
 }
 
-function CodeBlock({
+function ArtifactCard({
   language,
   code,
   onPreview,
@@ -21,8 +21,9 @@ function CodeBlock({
   onPreview?: (code: string, language: string) => void;
 }) {
   const [copied, setCopied] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
-  const isPreviewable = language === "html" || language === "htm";
+  const isHtml = language === "html" || language === "htm";
 
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(code);
@@ -30,53 +31,92 @@ function CodeBlock({
     setTimeout(() => setCopied(false), 2000);
   }, [code]);
 
+  const lines = code.split("\n").length;
+  const title = isHtml
+    ? code.match(/<title>(.*?)<\/title>/i)?.[1] || "HTML Page"
+    : `${(language || "code").toUpperCase()} snippet`;
+
   return (
-    <div className="relative group my-3 rounded-lg overflow-hidden border border-border/30">
-      <div className="flex items-center justify-between px-3 py-1.5 bg-muted/50 border-b border-border/30">
-        <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-          {language || "code"}
-        </span>
-        <div className="flex items-center gap-1">
-          {isPreviewable && onPreview && (
+    <div className="my-3 rounded-xl border border-border/40 bg-card overflow-hidden shadow-sm">
+      <div
+        className="flex items-center gap-3 px-4 py-3 cursor-pointer select-none hover:bg-muted/30 transition-colors"
+        onClick={() => {
+          if (isHtml && onPreview) {
+            onPreview(code, language || "html");
+          } else {
+            setExpanded(!expanded);
+          }
+        }}
+        data-testid="artifact-card"
+      >
+        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+          isHtml ? "bg-blue-500/10 border border-blue-500/20" : "bg-violet-500/10 border border-violet-500/20"
+        }`}>
+          {isHtml ? (
+            <Eye className={`w-4 h-4 ${isHtml ? "text-blue-500" : "text-violet-500"}`} />
+          ) : (
+            <Code2 className="w-4 h-4 text-violet-500" />
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium truncate">{title}</p>
+          <p className="text-[11px] text-muted-foreground">
+            {isHtml ? "Click to preview" : `${lines} lines · ${language || "code"}`}
+          </p>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-[11px] gap-1"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleCopy();
+            }}
+            data-testid="button-copy-artifact"
+          >
+            {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+          </Button>
+          {isHtml && onPreview ? (
             <Button
               size="sm"
-              variant="ghost"
-              className="h-6 px-2 text-[10px] gap-1 text-primary"
-              onClick={() => onPreview(code, language || "html")}
-              data-testid="button-preview-code"
+              variant="default"
+              className="h-7 px-3 text-[11px] gap-1"
+              onClick={(e) => {
+                e.stopPropagation();
+                onPreview(code, language || "html");
+              }}
+              data-testid="button-preview-artifact"
             >
               <Eye className="w-3 h-3" />
               Preview
             </Button>
+          ) : (
+            <div className="w-5 h-5 flex items-center justify-center">
+              {expanded ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />}
+            </div>
           )}
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-6 px-2 text-[10px] gap-1"
-            onClick={handleCopy}
-            data-testid="button-copy-code"
-          >
-            {copied ? (
-              <><Check className="w-3 h-3" /> Copied</>
-            ) : (
-              <><Copy className="w-3 h-3" /> Copy</>
-            )}
-          </Button>
         </div>
       </div>
-      <SyntaxHighlighter
-        style={oneDark}
-        language={language || "text"}
-        PreTag="div"
-        customStyle={{
-          margin: 0,
-          borderRadius: 0,
-          fontSize: "13px",
-          padding: "12px 16px",
-        }}
-      >
-        {code}
-      </SyntaxHighlighter>
+
+      {expanded && !isHtml && (
+        <div className="border-t border-border/30">
+          <SyntaxHighlighter
+            style={oneDark}
+            language={language || "text"}
+            PreTag="div"
+            customStyle={{
+              margin: 0,
+              borderRadius: 0,
+              fontSize: "12px",
+              padding: "12px 16px",
+              maxHeight: "400px",
+            }}
+          >
+            {code}
+          </SyntaxHighlighter>
+        </div>
+      )}
     </div>
   );
 }
@@ -101,7 +141,7 @@ export function MarkdownRenderer({ content, onPreview }: MarkdownRendererProps) 
           }
 
           return (
-            <CodeBlock
+            <ArtifactCard
               language={language}
               code={codeString}
               onPreview={onPreview}
