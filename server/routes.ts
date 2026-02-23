@@ -452,6 +452,84 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/settings/smtp", requireAuth, async (_req, res) => {
+    try {
+      const host = await storage.getSetting("smtp_host");
+      const port = await storage.getSetting("smtp_port");
+      const user = await storage.getSetting("smtp_user");
+      const pass = await storage.getSetting("smtp_pass");
+      const from = await storage.getSetting("smtp_from");
+      const notifyLogin = await storage.getSetting("smtp_notify_login");
+      const notifyApi = await storage.getSetting("smtp_notify_api");
+      res.json({
+        host: host?.value || "",
+        port: port?.value || "587",
+        user: user?.value || "",
+        pass: pass?.value || "",
+        from: from?.value || "",
+        notifyLogin: notifyLogin?.value === "true",
+        notifyApi: notifyApi?.value === "true",
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/settings/smtp", requireAuth, async (req, res) => {
+    try {
+      const { host, port, user, pass, from, notifyLogin, notifyApi } = req.body;
+      await storage.upsertSetting("smtp_host", host || "");
+      await storage.upsertSetting("smtp_port", port || "587");
+      await storage.upsertSetting("smtp_user", user || "");
+      await storage.upsertSetting("smtp_pass", pass || "");
+      await storage.upsertSetting("smtp_from", from || "");
+      await storage.upsertSetting("smtp_notify_login", notifyLogin ? "true" : "false");
+      await storage.upsertSetting("smtp_notify_api", notifyApi ? "true" : "false");
+      await storage.createLog({ action: "SMTP settings updated", details: `Host: ${host}`, source: "settings" });
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/email/send", requireAuth, async (req, res) => {
+    try {
+      const { to, subject, body } = req.body;
+      if (!to || !subject || !body) return res.status(400).json({ error: "to, subject, and body are required" });
+
+      const host = await storage.getSetting("smtp_host");
+      const port = await storage.getSetting("smtp_port");
+      const user = await storage.getSetting("smtp_user");
+      const pass = await storage.getSetting("smtp_pass");
+      const from = await storage.getSetting("smtp_from");
+
+      if (!host?.value || !user?.value || !pass?.value) {
+        return res.status(400).json({ error: "SMTP not configured. Please set up SMTP settings first." });
+      }
+
+      const nodemailer = await import("nodemailer");
+      const transporter = nodemailer.createTransport({
+        host: host.value,
+        port: parseInt(port?.value || "587"),
+        secure: parseInt(port?.value || "587") === 465,
+        auth: { user: user.value, pass: pass.value },
+      });
+
+      await transporter.sendMail({
+        from: from?.value || user.value,
+        to,
+        subject,
+        text: body,
+        html: body.replace(/\n/g, "<br>"),
+      });
+
+      await storage.createLog({ action: "Email sent", details: `To: ${to}, Subject: ${subject}`, source: "email" });
+      res.json({ success: true, message: "Email sent successfully" });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to send email" });
+    }
+  });
+
   app.delete("/api/github/repos/:owner/:repo", requireAuth, async (req, res) => {
     try {
       const { owner, repo } = req.params;

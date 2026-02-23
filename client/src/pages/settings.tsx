@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,11 @@ import {
   Globe,
   Cpu,
   Code,
+  Mail,
+  Send,
+  Save,
+  Loader2,
+  Bell,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { ApiKey } from "@shared/schema";
@@ -40,6 +45,17 @@ export default function SettingsPage() {
   const [newPassword, setNewPassword] = useState("");
   const [showCurrentPw, setShowCurrentPw] = useState(false);
   const [showNewPw, setShowNewPw] = useState(false);
+  const [emailTo, setEmailTo] = useState("");
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailBody, setEmailBody] = useState("");
+  const [smtpHost, setSmtpHost] = useState("");
+  const [smtpPort, setSmtpPort] = useState("587");
+  const [smtpUser, setSmtpUser] = useState("");
+  const [smtpPass, setSmtpPass] = useState("");
+  const [smtpFrom, setSmtpFrom] = useState("");
+  const [showSmtpSetup, setShowSmtpSetup] = useState(false);
+  const [notifyOnLogin, setNotifyOnLogin] = useState(false);
+  const [notifyOnApiUse, setNotifyOnApiUse] = useState(false);
 
   const { data: apiKeys = [] } = useQuery<ApiKey[]>({
     queryKey: ["/api/api-keys"],
@@ -89,6 +105,57 @@ export default function SettingsPage() {
     },
     onError: (error: Error) => {
       toast({ title: "Failed to change password", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const { data: smtpSettings } = useQuery<{ host: string; port: string; user: string; pass: string; from: string; notifyLogin: boolean; notifyApi: boolean }>({
+    queryKey: ["/api/settings/smtp"],
+  });
+
+  useEffect(() => {
+    if (smtpSettings) {
+      setSmtpHost(smtpSettings.host || "");
+      setSmtpPort(smtpSettings.port || "587");
+      setSmtpUser(smtpSettings.user || "");
+      setSmtpPass(smtpSettings.pass || "");
+      setSmtpFrom(smtpSettings.from || "");
+      setNotifyOnLogin(smtpSettings.notifyLogin || false);
+      setNotifyOnApiUse(smtpSettings.notifyApi || false);
+      if (smtpSettings.host) setShowSmtpSetup(true);
+    }
+  }, [smtpSettings]);
+
+  const saveSmtp = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", "/api/settings/smtp", {
+        host: smtpHost, port: smtpPort, user: smtpUser, pass: smtpPass, from: smtpFrom,
+        notifyLogin: notifyOnLogin, notifyApi: notifyOnApiUse,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/settings/smtp"] });
+      toast({ title: "SMTP settings saved" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to save SMTP", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const sendEmail = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/email/send", {
+        to: emailTo, subject: emailSubject, body: emailBody,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      setEmailTo("");
+      setEmailSubject("");
+      setEmailBody("");
+      toast({ title: "Email sent successfully" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to send email", description: error.message, variant: "destructive" });
     },
   });
 
@@ -300,6 +367,161 @@ export default function SettingsPage() {
               ))}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-5 space-y-4">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
+                <Mail className="w-4 h-4 text-blue-500" />
+              </div>
+              <div>
+                <h2 className="font-semibold text-sm">Email & Notifications</h2>
+                <p className="text-xs text-muted-foreground">Send emails and configure SMTP</p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-2 text-xs"
+              onClick={() => setShowSmtpSetup(!showSmtpSetup)}
+              data-testid="button-toggle-smtp"
+            >
+              <Settings className="w-3 h-3" />
+              {showSmtpSetup ? "Hide SMTP" : "SMTP Setup"}
+            </Button>
+          </div>
+
+          {showSmtpSetup && (
+            <div className="space-y-3 bg-muted/20 border border-border/30 rounded-lg p-4">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">SMTP Configuration</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[11px] text-muted-foreground">SMTP Host</label>
+                  <Input
+                    data-testid="input-smtp-host"
+                    placeholder="smtp.gmail.com"
+                    value={smtpHost}
+                    onChange={(e) => setSmtpHost(e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] text-muted-foreground">Port</label>
+                  <Input
+                    data-testid="input-smtp-port"
+                    placeholder="587"
+                    value={smtpPort}
+                    onChange={(e) => setSmtpPort(e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[11px] text-muted-foreground">Username / Email</label>
+                  <Input
+                    data-testid="input-smtp-user"
+                    placeholder="your@gmail.com"
+                    value={smtpUser}
+                    onChange={(e) => setSmtpUser(e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] text-muted-foreground">Password / App Password</label>
+                  <Input
+                    data-testid="input-smtp-pass"
+                    type="password"
+                    placeholder="••••••••"
+                    value={smtpPass}
+                    onChange={(e) => setSmtpPass(e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[11px] text-muted-foreground">From Email</label>
+                <Input
+                  data-testid="input-smtp-from"
+                  placeholder="jarvis@yourdomain.com"
+                  value={smtpFrom}
+                  onChange={(e) => setSmtpFrom(e.target.value)}
+                  className="h-8 text-xs"
+                />
+              </div>
+              <div className="space-y-2 pt-2">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                  <Bell className="w-3 h-3" />
+                  Auto Notifications
+                </p>
+                <div className="flex items-center justify-between py-1">
+                  <span className="text-xs text-muted-foreground">Notify on login</span>
+                  <Switch
+                    data-testid="switch-notify-login"
+                    checked={notifyOnLogin}
+                    onCheckedChange={setNotifyOnLogin}
+                  />
+                </div>
+                <div className="flex items-center justify-between py-1">
+                  <span className="text-xs text-muted-foreground">Notify on API key usage</span>
+                  <Switch
+                    data-testid="switch-notify-api"
+                    checked={notifyOnApiUse}
+                    onCheckedChange={setNotifyOnApiUse}
+                  />
+                </div>
+              </div>
+              <Button
+                size="sm"
+                className="gap-2 text-xs w-full"
+                onClick={() => saveSmtp.mutate()}
+                disabled={!smtpHost || !smtpUser || !smtpPass || saveSmtp.isPending}
+                data-testid="button-save-smtp"
+              >
+                {saveSmtp.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                Save SMTP Settings
+              </Button>
+            </div>
+          )}
+
+          <div className="space-y-3">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Send Email</p>
+            <Input
+              data-testid="input-email-to"
+              placeholder="recipient@example.com"
+              value={emailTo}
+              onChange={(e) => setEmailTo(e.target.value)}
+              className="h-9 text-sm"
+            />
+            <Input
+              data-testid="input-email-subject"
+              placeholder="Subject"
+              value={emailSubject}
+              onChange={(e) => setEmailSubject(e.target.value)}
+              className="h-9 text-sm"
+            />
+            <textarea
+              data-testid="textarea-email-body"
+              value={emailBody}
+              onChange={(e) => setEmailBody(e.target.value)}
+              rows={4}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-primary"
+              placeholder="Write your email message..."
+            />
+            <Button
+              data-testid="button-send-email"
+              onClick={() => sendEmail.mutate()}
+              disabled={!emailTo || !emailSubject || !emailBody || sendEmail.isPending}
+              className="gap-2 text-xs"
+              size="sm"
+            >
+              {sendEmail.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+              {sendEmail.isPending ? "Sending..." : "Send Email"}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
