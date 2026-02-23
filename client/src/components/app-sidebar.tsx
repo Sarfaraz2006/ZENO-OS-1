@@ -22,6 +22,7 @@ import {
   Shield,
   Terminal,
   GitBranch,
+  Code2,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,7 @@ const mainNav = [
   { title: "Models", url: "/models", icon: Bot },
   { title: "Terminal", url: "/terminal", icon: Terminal },
   { title: "GitHub", url: "/github", icon: GitBranch },
+  { title: "Editor", url: "/editor", icon: Code2 },
 ];
 
 const systemNav = [

@@ -27,6 +27,7 @@ A comprehensive Jarvis-like AI assistant platform with Lovable-style code genera
 - `client/src/pages/models.tsx` - Model hub (add/search/filter/toggle/favorite)
 - `client/src/pages/terminal.tsx` - Real web terminal (child_process.exec, 30s timeout, 1MB buffer)
 - `client/src/pages/github.tsx` - Real GitHub repos, create repos, deploy to GitHub Pages
+- `client/src/pages/code-editor.tsx` - GitHub code editor (browse files, edit, save, create, delete)
 - `client/src/pages/settings.tsx` - API keys, password change, API docs
 - `client/src/pages/login.tsx` - Futuristic login page
 - `client/src/components/app-sidebar.tsx` - Navigation sidebar (onClick + setLocation pattern)
@@ -34,7 +35,7 @@ A comprehensive Jarvis-like AI assistant platform with Lovable-style code genera
 ## Navigation Pattern
 - Sidebar uses onClick handlers with wouter's setLocation (not Link asChild)
 - On mobile, sidebar closes after navigation via setOpenMobile(false)
-- Pages: Dashboard, Chat, Models, Terminal, GitHub, Settings
+- Pages: Dashboard, Chat, Models, Terminal, GitHub, Editor, Settings
 
 ## Default Credentials
 - Password: `admin` (change in Settings)
@@ -59,6 +60,7 @@ A comprehensive Jarvis-like AI assistant platform with Lovable-style code genera
 17. **Conversation export** to markdown file
 18. **Real Web Terminal** - executes actual Linux commands (ls, node, python3, git, curl, etc.)
 19. **Real GitHub Integration** - list repos, create repos, deploy to GitHub Pages
+23. **GitHub Code Editor** - browse repo files, open/edit/save/create/delete files, Ctrl+S to commit
 20. **PWA support** - installable on mobile/desktop
 21. Model cost display and context window info
 22. Browse OpenRouter link for discovering models

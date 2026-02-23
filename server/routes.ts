@@ -366,6 +366,92 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/github/repos/:owner/:repo/tree", requireAuth, async (req, res) => {
+    try {
+      const { owner, repo } = req.params;
+      const path = (req.query.path as string) || "";
+      const ref = (req.query.ref as string) || "main";
+      const { getUncachableGitHubClient } = await import("./github-client");
+      const octokit = await getUncachableGitHubClient();
+      const { data } = await octokit.repos.getContent({ owner, repo, path, ref });
+      if (Array.isArray(data)) {
+        const items = data.map(item => ({
+          name: item.name,
+          path: item.path,
+          type: item.type,
+          size: item.size,
+          sha: item.sha,
+        })).sort((a, b) => {
+          if (a.type === "dir" && b.type !== "dir") return -1;
+          if (a.type !== "dir" && b.type === "dir") return 1;
+          return a.name.localeCompare(b.name);
+        });
+        res.json(items);
+      } else {
+        res.json([{ name: data.name, path: data.path, type: data.type, size: data.size, sha: data.sha }]);
+      }
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to fetch tree" });
+    }
+  });
+
+  app.get("/api/github/repos/:owner/:repo/file", requireAuth, async (req, res) => {
+    try {
+      const { owner, repo } = req.params;
+      const path = req.query.path as string;
+      const ref = (req.query.ref as string) || "main";
+      if (!path) return res.status(400).json({ error: "Path required" });
+      const { getUncachableGitHubClient } = await import("./github-client");
+      const octokit = await getUncachableGitHubClient();
+      const { data } = await octokit.repos.getContent({ owner, repo, path, ref });
+      if (Array.isArray(data) || data.type !== "file") {
+        return res.status(400).json({ error: "Not a file" });
+      }
+      const content = Buffer.from(data.content, "base64").toString("utf-8");
+      res.json({ name: data.name, path: data.path, content, sha: data.sha, size: data.size });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to fetch file" });
+    }
+  });
+
+  app.put("/api/github/repos/:owner/:repo/file", requireAuth, async (req, res) => {
+    try {
+      const { owner, repo } = req.params;
+      const { path, content, message, sha, branch } = req.body;
+      if (!path || content === undefined) return res.status(400).json({ error: "Path and content required" });
+      const { getUncachableGitHubClient } = await import("./github-client");
+      const octokit = await getUncachableGitHubClient();
+      const encoded = Buffer.from(content).toString("base64");
+      const params: any = { owner, repo, path, message: message || `Update ${path}`, content: encoded };
+      if (sha) params.sha = sha;
+      if (branch) params.branch = branch;
+      const { data } = await octokit.repos.createOrUpdateFileContents(params);
+      await storage.createLog({ action: "GitHub file updated", details: `${owner}/${repo}/${path}`, source: "github" });
+      res.json({ success: true, sha: data.content?.sha, commit: data.commit?.sha });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to update file" });
+    }
+  });
+
+  app.delete("/api/github/repos/:owner/:repo/file", requireAuth, async (req, res) => {
+    try {
+      const { owner, repo } = req.params;
+      const { path, sha, message, branch } = req.body;
+      if (!path || !sha) return res.status(400).json({ error: "Path and sha required" });
+      const { getUncachableGitHubClient } = await import("./github-client");
+      const octokit = await getUncachableGitHubClient();
+      await octokit.repos.deleteFile({
+        owner, repo, path, sha,
+        message: message || `Delete ${path}`,
+        branch: branch || "main",
+      });
+      await storage.createLog({ action: "GitHub file deleted", details: `${owner}/${repo}/${path}`, source: "github" });
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to delete file" });
+    }
+  });
+
   app.delete("/api/github/repos/:owner/:repo", requireAuth, async (req, res) => {
     try {
       const { owner, repo } = req.params;
