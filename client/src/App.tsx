@@ -5,10 +5,11 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
-import { ThemeProvider, useTheme } from "@/lib/theme";
+import { ThemeProvider, useTheme, type ThemeAccent } from "@/lib/theme";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
-import { Moon, Sun } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Moon, Sun, Palette } from "lucide-react";
 import NotFound from "@/pages/not-found";
 import LoginPage from "@/pages/login";
 import DashboardPage from "@/pages/dashboard";
@@ -19,17 +20,51 @@ import TerminalPage from "@/pages/terminal";
 import GitHubPage from "@/pages/github";
 import CodeEditorPage from "@/pages/code-editor";
 
-function ThemeToggle() {
-  const { theme, toggleTheme } = useTheme();
+const ACCENT_OPTIONS: { value: ThemeAccent; label: string; color: string }[] = [
+  { value: "blue", label: "Blue", color: "bg-blue-500" },
+  { value: "emerald", label: "Emerald", color: "bg-emerald-500" },
+  { value: "violet", label: "Violet", color: "bg-violet-500" },
+  { value: "rose", label: "Rose", color: "bg-rose-500" },
+  { value: "amber", label: "Amber", color: "bg-amber-500" },
+  { value: "cyan", label: "Cyan", color: "bg-cyan-500" },
+];
+
+function ThemeControls() {
+  const { theme, toggleTheme, accent, setAccent } = useTheme();
   return (
-    <Button
-      size="icon"
-      variant="ghost"
-      onClick={toggleTheme}
-      data-testid="button-theme-toggle"
-    >
-      {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-    </Button>
+    <div className="flex items-center gap-1">
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button size="icon" variant="ghost" data-testid="button-accent-picker">
+            <Palette className="w-4 h-4" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-44 p-3" align="end">
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-medium mb-2">Accent Color</p>
+          <div className="grid grid-cols-3 gap-2">
+            {ACCENT_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setAccent(opt.value)}
+                className={`flex flex-col items-center gap-1.5 p-2 rounded-lg transition-colors ${accent === opt.value ? "bg-primary/10 ring-1 ring-primary/30" : "hover:bg-muted/50"}`}
+                data-testid={`button-accent-${opt.value}`}
+              >
+                <div className={`w-5 h-5 rounded-full ${opt.color}`} />
+                <span className="text-[10px]">{opt.label}</span>
+              </button>
+            ))}
+          </div>
+        </PopoverContent>
+      </Popover>
+      <Button
+        size="icon"
+        variant="ghost"
+        onClick={toggleTheme}
+        data-testid="button-theme-toggle"
+      >
+        {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+      </Button>
+    </div>
   );
 }
 
@@ -61,7 +96,7 @@ function AuthenticatedApp() {
         <div className="flex flex-col flex-1 min-w-0">
           <header className="flex items-center justify-between gap-2 px-3 h-12 shrink-0 border-b border-border/30 bg-background/80 backdrop-blur-sm">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
-            <ThemeToggle />
+            <ThemeControls />
           </header>
           <main className="flex-1 overflow-auto">
             <Router />

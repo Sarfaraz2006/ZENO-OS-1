@@ -48,12 +48,12 @@ A comprehensive Jarvis-like AI assistant platform with Lovable-style code genera
 5. **Artifact cards** - Code blocks hidden behind clickable cards, HTML auto-previews
 6. **System prompt** - Optimized for professional website generation (Google Fonts, gradients, animations)
 7. API key management for external access (generate, toggle, delete)
-8. Dark/light theme toggle
+8. **Multi-theme system** - Dark/Light mode + 6 accent colors (Blue, Emerald, Violet, Rose, Amber, Cyan)
 9. Voice input with **auto-send** after recognition (ref-based, avoids stale closures)
 10. Voice output (Text-to-Speech) with toggle
 11. Continuous conversation mode (auto-listen after response)
 12. Activity logging with source icons
-13. Dashboard with stats, platform capabilities, quick actions
+13. **Analytics Dashboard** - Charts (area, bar, pie via recharts), stats cards with gradients, quick actions grid
 14. REST API documentation in settings
 15. Copy message to clipboard
 16. Collapsible chat sidebar
