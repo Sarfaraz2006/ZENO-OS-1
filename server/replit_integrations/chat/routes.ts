@@ -66,17 +66,24 @@ export function registerChatRoutes(app: Express): void {
   app.post("/api/conversations/:id/messages", async (req: Request, res: Response) => {
     try {
       const conversationId = parseInt(req.params.id);
-      const { content, model = "meta-llama/llama-3.3-70b-instruct" } = req.body;
+      const { content, model = "meta-llama/llama-3.3-70b-instruct", systemPrompt } = req.body;
 
       // Save user message
       await chatStorage.createMessage(conversationId, "user", content);
 
       // Get conversation history for context
       const messages = await chatStorage.getMessagesByConversation(conversationId);
-      const chatMessages = messages.map((m) => ({
+      const chatMessages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [];
+
+      // Add system prompt if provided
+      if (systemPrompt) {
+        chatMessages.push({ role: "system", content: systemPrompt });
+      }
+
+      chatMessages.push(...messages.map((m) => ({
         role: m.role as "user" | "assistant",
         content: m.content,
-      }));
+      })));
 
       // Set up SSE
       res.setHeader("Content-Type", "text/event-stream");
@@ -88,7 +95,7 @@ export function registerChatRoutes(app: Express): void {
         model,
         messages: chatMessages,
         stream: true,
-        max_tokens: 8192,
+        max_tokens: 16384,
       });
 
       let fullResponse = "";

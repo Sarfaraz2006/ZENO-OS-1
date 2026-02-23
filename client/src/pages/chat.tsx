@@ -14,6 +14,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
   Send,
   Plus,
   Trash2,
@@ -31,7 +38,13 @@ import {
   Cpu,
   Copy,
   Check,
+  Download,
+  Settings2,
+  Eye,
+  X,
 } from "lucide-react";
+import { MarkdownRenderer } from "@/components/markdown-renderer";
+import { CodePreview } from "@/components/code-preview";
 import type { AiModel } from "@shared/schema";
 
 interface Message {
@@ -48,6 +61,19 @@ interface Conversation {
   messages?: Message[];
 }
 
+const DEFAULT_SYSTEM_PROMPT = `You are J.A.R.V.I.S, an advanced AI assistant platform. You are helpful, knowledgeable, and precise.
+
+When the user asks you to build, create, or generate any web page, website, landing page, UI component, or app:
+- Generate complete, production-ready HTML code with inline CSS and JavaScript
+- Use modern design with gradients, shadows, proper typography, and responsive layout
+- Include all necessary styles inline or in a <style> tag
+- Make the output visually impressive and professional
+- Always wrap the full code in a single \`\`\`html code block so it can be previewed
+- Include proper meta tags, viewport settings, and a complete HTML structure
+
+When the user asks for code in any language, use proper markdown code blocks with language tags.
+When explaining concepts, use markdown formatting (headers, lists, bold, etc.) for clarity.`;
+
 export default function ChatPage() {
   const [activeConversation, setActiveConversation] = useState<number | null>(null);
   const [input, setInput] = useState("");
@@ -59,6 +85,9 @@ export default function ChatPage() {
   const [continuousMode, setContinuousMode] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
   const [copiedId, setCopiedId] = useState<number | null>(null);
+  const [systemPrompt, setSystemPrompt] = useState(DEFAULT_SYSTEM_PROMPT);
+  const [showSystemPrompt, setShowSystemPrompt] = useState(false);
+  const [previewCode, setPreviewCode] = useState<{ code: string; language: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -128,7 +157,8 @@ export default function ChatPage() {
   const speakText = useCallback((text: string) => {
     if (!voiceEnabled) return;
     window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
+    const plainText = text.replace(/```[\s\S]*?```/g, "Code block.").replace(/[#*`_~]/g, "");
+    const u = new SpeechSynthesisUtterance(plainText);
     u.rate = 1;
     u.pitch = 1;
     u.onend = () => {
@@ -160,7 +190,11 @@ export default function ChatPage() {
       const response = await fetch(`/api/conversations/${convId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: message, model: selectedModel }),
+        body: JSON.stringify({
+          content: message,
+          model: selectedModel,
+          systemPrompt,
+        }),
         credentials: "include",
       });
 
@@ -209,8 +243,36 @@ export default function ChatPage() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  const exportConversation = () => {
+    if (!activeChat?.messages) return;
+    const text = activeChat.messages.map((m) =>
+      `## ${m.role === "user" ? "You" : "Jarvis"}\n${m.content}\n`
+    ).join("\n---\n\n");
+    const blob = new Blob([`# ${activeChat.title}\n\n${text}`], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${activeChat.title.replace(/\s+/g, "-").toLowerCase()}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handlePreview = (code: string, language: string) => {
+    setPreviewCode({ code, language });
+  };
+
   const displayMessages = activeChat?.messages || [];
   const currentModel = enabledModels.find(m => m.modelId === selectedModel);
+
+  if (previewCode) {
+    return (
+      <CodePreview
+        code={previewCode.code}
+        language={previewCode.language}
+        onClose={() => setPreviewCode(null)}
+      />
+    );
+  }
 
   return (
     <div className="flex h-full">
@@ -313,6 +375,69 @@ export default function ChatPage() {
             )}
           </div>
           <div className="flex items-center gap-1">
+            <Dialog open={showSystemPrompt} onOpenChange={setShowSystemPrompt}>
+              <DialogTrigger asChild>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button size="icon" variant="ghost" data-testid="button-system-prompt">
+                      <Settings2 className="w-4 h-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>System prompt</TooltipContent>
+                </Tooltip>
+              </DialogTrigger>
+              <DialogContent className="max-w-lg">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Settings2 className="w-4 h-4 text-primary" />
+                    System Prompt
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3 mt-2">
+                  <p className="text-xs text-muted-foreground">
+                    Customize how the AI behaves. This prompt is sent with every message.
+                  </p>
+                  <Textarea
+                    data-testid="textarea-system-prompt"
+                    value={systemPrompt}
+                    onChange={(e) => setSystemPrompt(e.target.value)}
+                    rows={10}
+                    className="text-xs font-mono"
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs"
+                      onClick={() => setSystemPrompt(DEFAULT_SYSTEM_PROMPT)}
+                      data-testid="button-reset-system-prompt"
+                    >
+                      Reset to Default
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="text-xs"
+                      onClick={() => setShowSystemPrompt(false)}
+                      data-testid="button-save-system-prompt"
+                    >
+                      Save
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            {activeChat && activeChat.messages && activeChat.messages.length > 0 && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button size="icon" variant="ghost" onClick={exportConversation} data-testid="button-export-chat">
+                    <Download className="w-4 h-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Export conversation</TooltipContent>
+              </Tooltip>
+            )}
+
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -356,20 +481,19 @@ export default function ChatPage() {
                 <div className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-primary animate-pulse" />
               </div>
               <div className="text-center max-w-md">
-                <h2 className="text-xl font-semibold mb-2">How can I help you?</h2>
+                <h2 className="text-xl font-semibold mb-2">What shall I build for you?</h2>
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  I can write code, analyze data, answer questions, and assist with any task.
-                  Select a model above to get started.
+                  I can build websites, write code, analyze data, and more. Ask me to create anything and see a live preview.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2 justify-center max-w-lg">
                 {[
-                  "Write a Python REST API",
-                  "Explain quantum computing",
-                  "Analyze this code",
-                  "Debug my error",
-                  "Create a business plan",
-                  "Write a SQL query",
+                  "Build a cafe landing page",
+                  "Create a portfolio website",
+                  "Design a pricing table",
+                  "Build a login form",
+                  "Write a Python API",
+                  "Explain React hooks",
                 ].map((suggestion) => (
                   <Badge
                     key={suggestion}
@@ -392,7 +516,7 @@ export default function ChatPage() {
                 <div
                   key={msg.id}
                   data-testid={`message-${msg.id}`}
-                  className={`flex gap-3 py-4 ${msg.role === "user" ? "" : ""}`}
+                  className="flex gap-3 py-4"
                 >
                   <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
                     msg.role === "user"
@@ -414,11 +538,15 @@ export default function ChatPage() {
                         {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                       </span>
                     </div>
-                    <div className="text-sm leading-relaxed whitespace-pre-wrap break-words prose prose-sm dark:prose-invert max-w-none">
-                      {msg.content}
+                    <div className="text-sm leading-relaxed">
+                      {msg.role === "assistant" ? (
+                        <MarkdownRenderer content={msg.content} onPreview={handlePreview} />
+                      ) : (
+                        <div className="whitespace-pre-wrap break-words">{msg.content}</div>
+                      )}
                     </div>
                     {msg.role === "assistant" && (
-                      <div className="mt-2">
+                      <div className="mt-2 flex items-center gap-1">
                         <Button
                           size="sm"
                           variant="ghost"
@@ -448,11 +576,11 @@ export default function ChatPage() {
                       <span className="text-xs font-medium">Jarvis</span>
                       <Badge variant="outline" className="text-[10px] gap-1 h-4 px-1.5 animate-pulse">
                         <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                        Thinking
+                        Generating
                       </Badge>
                     </div>
-                    <div className="text-sm leading-relaxed whitespace-pre-wrap break-words">
-                      {streamingContent}
+                    <div className="text-sm leading-relaxed">
+                      <MarkdownRenderer content={streamingContent} onPreview={handlePreview} />
                     </div>
                   </div>
                 </div>
@@ -465,7 +593,7 @@ export default function ChatPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                    <span className="text-sm text-muted-foreground">Processing...</span>
+                    <span className="text-sm text-muted-foreground">Thinking...</span>
                   </div>
                 </div>
               )}
@@ -480,7 +608,7 @@ export default function ChatPage() {
               <Textarea
                 ref={textareaRef}
                 data-testid="input-chat-message"
-                placeholder={isListening ? "Listening..." : "Message Jarvis..."}
+                placeholder={isListening ? "Listening..." : "Ask me to build something..."}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
