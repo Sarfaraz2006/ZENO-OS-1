@@ -111,6 +111,10 @@ export default function BusinessPage() {
   const [contactEmail, setContactEmail] = useState("");
   const [contactPhone, setContactPhone] = useState("");
 
+  const { data: integrationStatus } = useQuery<{ email: { connected: boolean }; whatsapp: { connected: boolean }; stripe: { connected: boolean }; n8n: { connected: boolean } }>({
+    queryKey: ["/api/integrations/status"],
+  });
+
   const { data: stats, isLoading: statsLoading } = useQuery<BusinessStats>({
     queryKey: ["/api/business/stats"],
   });
@@ -391,58 +395,55 @@ export default function BusinessPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-            <Card className="hover-elevate">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <Mail className="w-4 h-4 text-blue-500" />
-                  <span className="text-xs font-medium">Email</span>
-                  <Badge variant="outline" className="text-[10px] h-5 ml-auto text-emerald-500 border-emerald-500/30">
-                    <CheckCircle2 className="w-2.5 h-2.5 mr-0.5" />
-                    Connected
-                  </Badge>
-                </div>
-                <p className="text-[11px] text-muted-foreground">SMTP configured in Settings. Send, receive, and reply to emails.</p>
-              </CardContent>
-            </Card>
-            <Card className="hover-elevate">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <MessageCircle className="w-4 h-4 text-emerald-500" />
-                  <span className="text-xs font-medium">WhatsApp</span>
-                  <Badge variant="outline" className="text-[10px] h-5 ml-auto text-amber-500 border-amber-500/30">
-                    <AlertCircle className="w-2.5 h-2.5 mr-0.5" />
-                    Setup Needed
-                  </Badge>
-                </div>
-                <p className="text-[11px] text-muted-foreground">Connect Twilio for WhatsApp Business messaging.</p>
-              </CardContent>
-            </Card>
-            <Card className="hover-elevate">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <DollarSign className="w-4 h-4 text-amber-500" />
-                  <span className="text-xs font-medium">Payments</span>
-                  <Badge variant="outline" className="text-[10px] h-5 ml-auto text-amber-500 border-amber-500/30">
-                    <AlertCircle className="w-2.5 h-2.5 mr-0.5" />
-                    Setup Needed
-                  </Badge>
-                </div>
-                <p className="text-[11px] text-muted-foreground">Connect Stripe for payment tracking and invoicing.</p>
-              </CardContent>
-            </Card>
-            <Card className="hover-elevate">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <Workflow className="w-4 h-4 text-violet-500" />
-                  <span className="text-xs font-medium">n8n</span>
-                  <Badge variant="outline" className="text-[10px] h-5 ml-auto text-emerald-500 border-emerald-500/30">
-                    <CheckCircle2 className="w-2.5 h-2.5 mr-0.5" />
-                    Ready
-                  </Badge>
-                </div>
-                <p className="text-[11px] text-muted-foreground">Webhook endpoint ready. Send POST to /api/business/webhook/n8n</p>
-              </CardContent>
-            </Card>
+            {[
+              {
+                label: "Email", icon: Mail, iconColor: "text-blue-500",
+                connected: integrationStatus?.email.connected ?? false,
+                connectedText: "SMTP configured. Send, receive, and reply to emails.",
+                disconnectedText: "Configure SMTP in Settings to enable email.",
+              },
+              {
+                label: "WhatsApp", icon: MessageCircle, iconColor: "text-emerald-500",
+                connected: integrationStatus?.whatsapp.connected ?? false,
+                connectedText: "Twilio connected. WhatsApp messaging enabled.",
+                disconnectedText: "Connect Twilio in Settings to enable WhatsApp.",
+              },
+              {
+                label: "Payments", icon: DollarSign, iconColor: "text-amber-500",
+                connected: integrationStatus?.stripe.connected ?? false,
+                connectedText: "Stripe connected. Payment tracking enabled.",
+                disconnectedText: "Connect Stripe in Settings to track payments.",
+              },
+              {
+                label: "n8n", icon: Workflow, iconColor: "text-violet-500",
+                connected: true,
+                connectedText: "Webhook endpoint active at /api/business/webhook/n8n",
+                disconnectedText: "",
+              },
+            ].map((item) => (
+              <Card key={item.label} className="hover-elevate">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <item.icon className={`w-4 h-4 ${item.iconColor}`} />
+                    <span className="text-xs font-medium">{item.label}</span>
+                    {item.connected ? (
+                      <Badge variant="outline" className="text-[10px] h-5 ml-auto text-emerald-500 border-emerald-500/30">
+                        <CheckCircle2 className="w-2.5 h-2.5 mr-0.5" />
+                        Connected
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-[10px] h-5 ml-auto text-muted-foreground border-border/50">
+                        <AlertCircle className="w-2.5 h-2.5 mr-0.5" />
+                        Not Connected
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    {item.connected ? item.connectedText : item.disconnectedText}
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
           </div>
 
           <Card>

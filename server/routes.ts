@@ -711,6 +711,35 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/integrations/status", requireAuth, async (_req, res) => {
+    try {
+      const n8nWebhookUrl = `${process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : ""}/api/business/webhook/n8n`;
+      const smtpHost = await storage.getSetting("smtp_host");
+      const smtpConfigured = !!smtpHost?.value;
+      
+      let twilioConnected = false;
+      try {
+        const fs = await import("fs");
+        twilioConnected = fs.existsSync("./server/twilio-client.ts") || fs.existsSync("./server/replit_integrations/twilio");
+      } catch {}
+
+      let stripeConnected = false;
+      try {
+        const fs = await import("fs");
+        stripeConnected = fs.existsSync("./server/stripe-client.ts") || fs.existsSync("./server/replit_integrations/stripe");
+      } catch {}
+
+      res.json({
+        email: { connected: smtpConfigured, label: smtpConfigured ? "Connected" : "Setup in SMTP above" },
+        whatsapp: { connected: twilioConnected, label: twilioConnected ? "Connected" : "Not Connected" },
+        stripe: { connected: stripeConnected, label: stripeConnected ? "Connected" : "Not Connected" },
+        n8n: { connected: true, webhookUrl: n8nWebhookUrl, label: "Webhook Ready" },
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.delete("/api/github/repos/:owner/:repo", requireAuth, async (req, res) => {
     try {
       const { owner, repo } = req.params;

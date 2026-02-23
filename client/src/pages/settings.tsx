@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -575,19 +575,76 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardContent className="p-5 space-y-4">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
-              <Workflow className="w-4 h-4 text-violet-500" />
-            </div>
-            <div>
-              <h2 className="font-semibold text-sm">Integrations</h2>
-              <p className="text-xs text-muted-foreground">Connect external services to your JARVIS</p>
-            </div>
+      <IntegrationsSection />
+    </div>
+  );
+}
+
+interface IntegrationStatus {
+  email: { connected: boolean; label: string };
+  whatsapp: { connected: boolean; label: string };
+  stripe: { connected: boolean; label: string };
+  n8n: { connected: boolean; webhookUrl: string; label: string };
+}
+
+function IntegrationsSection() {
+  const { toast } = useToast();
+  const [n8nCopied, setN8nCopied] = useState(false);
+  const [n8nExpanded, setN8nExpanded] = useState(false);
+
+  const { data: status } = useQuery<IntegrationStatus>({
+    queryKey: ["/api/integrations/status"],
+  });
+
+  const copyWebhook = useCallback(() => {
+    if (status?.n8n.webhookUrl) {
+      navigator.clipboard.writeText(status.n8n.webhookUrl);
+      setN8nCopied(true);
+      toast({ title: "Webhook URL copied!" });
+      setTimeout(() => setN8nCopied(false), 2000);
+    }
+  }, [status, toast]);
+
+  const statusBadge = (connected: boolean, label: string) => (
+    <Badge variant="outline" className={`text-[10px] h-5 ${connected ? "text-emerald-500 border-emerald-500/30" : "text-muted-foreground border-border/50"}`}>
+      {connected && <Check className="w-2.5 h-2.5 mr-0.5" />}
+      {label}
+    </Badge>
+  );
+
+  return (
+    <Card>
+      <CardContent className="p-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
+            <Workflow className="w-4 h-4 text-violet-500" />
           </div>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between p-3 rounded-lg border border-border/30" data-testid="integration-whatsapp">
+          <div>
+            <h2 className="font-semibold text-sm">Integrations</h2>
+            <p className="text-xs text-muted-foreground">Connect external services to your JARVIS</p>
+          </div>
+        </div>
+        <div className="space-y-2">
+          <div className="p-3 rounded-lg border border-border/30" data-testid="integration-email">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                  <Mail className="w-4 h-4 text-blue-500" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Email (SMTP/IMAP)</p>
+                  <p className="text-[11px] text-muted-foreground">Send & receive emails</p>
+                </div>
+              </div>
+              {statusBadge(status?.email.connected ?? false, status?.email.label ?? "Not Configured")}
+            </div>
+            {!status?.email.connected && (
+              <p className="text-[11px] text-muted-foreground mt-2 ml-11">Configure SMTP settings above to enable email integration.</p>
+            )}
+          </div>
+
+          <div className="p-3 rounded-lg border border-border/30" data-testid="integration-whatsapp">
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
                   <MessageCircle className="w-4 h-4 text-emerald-500" />
@@ -597,38 +654,100 @@ export default function SettingsPage() {
                   <p className="text-[11px] text-muted-foreground">Send & receive via Twilio API</p>
                 </div>
               </div>
-              <Badge variant="outline" className="text-[10px] h-5 text-amber-500 border-amber-500/30">Coming Soon</Badge>
+              {statusBadge(status?.whatsapp.connected ?? false, status?.whatsapp.label ?? "Not Connected")}
             </div>
-            <div className="flex items-center justify-between p-3 rounded-lg border border-border/30" data-testid="integration-stripe">
+            {!status?.whatsapp.connected && (
+              <div className="mt-2 ml-11 space-y-2">
+                <p className="text-[11px] text-muted-foreground">
+                  Twilio integration is available. Connect your Twilio account to enable WhatsApp messaging.
+                </p>
+                <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1.5" onClick={() => toast({ title: "Twilio Setup", description: "Use the Replit integrations panel to connect your Twilio account, then reload this page." })} data-testid="button-connect-twilio">
+                  <ExternalLink className="w-3 h-3" />
+                  Connect Twilio
+                </Button>
+              </div>
+            )}
+          </div>
+
+          <div className="p-3 rounded-lg border border-border/30" data-testid="integration-stripe">
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                  <DollarSign className="w-4 h-4 text-blue-500" />
+                <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center">
+                  <DollarSign className="w-4 h-4 text-violet-500" />
                 </div>
                 <div>
                   <p className="text-sm font-medium">Stripe Payments</p>
                   <p className="text-[11px] text-muted-foreground">Track invoices & payments</p>
                 </div>
               </div>
-              <Badge variant="outline" className="text-[10px] h-5 text-amber-500 border-amber-500/30">Coming Soon</Badge>
+              {statusBadge(status?.stripe.connected ?? false, status?.stripe.label ?? "Not Connected")}
             </div>
-            <div className="flex items-center justify-between p-3 rounded-lg border border-border/30" data-testid="integration-n8n">
+            {!status?.stripe.connected && (
+              <div className="mt-2 ml-11 space-y-2">
+                <p className="text-[11px] text-muted-foreground">
+                  Stripe integration is available. Connect your Stripe account to track payments and invoices.
+                </p>
+                <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1.5" onClick={() => toast({ title: "Stripe Setup", description: "Use the Replit integrations panel to connect your Stripe account, then reload this page." })} data-testid="button-connect-stripe">
+                  <ExternalLink className="w-3 h-3" />
+                  Connect Stripe
+                </Button>
+              </div>
+            )}
+          </div>
+
+          <div className="p-3 rounded-lg border border-border/30" data-testid="integration-n8n">
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-orange-500/10 flex items-center justify-center">
                   <Workflow className="w-4 h-4 text-orange-500" />
                 </div>
                 <div>
                   <p className="text-sm font-medium">n8n Automation</p>
-                  <p className="text-[11px] text-muted-foreground">Webhook: POST /api/business/webhook/n8n</p>
+                  <p className="text-[11px] text-muted-foreground">Webhook endpoint for automation workflows</p>
                 </div>
               </div>
-              <Badge variant="outline" className="text-[10px] h-5 text-emerald-500 border-emerald-500/30">
-                <Check className="w-2.5 h-2.5 mr-0.5" />
-                Ready
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => setN8nExpanded(!n8nExpanded)} data-testid="button-n8n-details">
+                  {n8nExpanded ? "Hide" : "Setup"}
+                </Button>
+                {statusBadge(true, "Ready")}
+              </div>
             </div>
+            {n8nExpanded && (
+              <div className="mt-3 ml-11 space-y-3">
+                <div className="space-y-1.5">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Webhook URL</p>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 text-[11px] font-mono bg-muted/50 px-3 py-2 rounded-md break-all" data-testid="text-n8n-webhook-url">
+                      {status?.n8n.webhookUrl || "/api/business/webhook/n8n"}
+                    </code>
+                    <Button size="icon" variant="outline" className="w-8 h-8 shrink-0" onClick={copyWebhook} data-testid="button-copy-n8n-webhook">
+                      {n8nCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">How to use</p>
+                  <div className="bg-muted/30 rounded-lg p-3 space-y-1">
+                    <p className="text-[11px] text-muted-foreground">1. In n8n, add an HTTP Request node</p>
+                    <p className="text-[11px] text-muted-foreground">2. Set method to <code className="bg-muted px-1 rounded">POST</code></p>
+                    <p className="text-[11px] text-muted-foreground">3. Paste the webhook URL above</p>
+                    <p className="text-[11px] text-muted-foreground">4. Send JSON body: <code className="bg-muted px-1 rounded">{`{"event": "your_event", "data": {...}}`}</code></p>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Test Webhook</p>
+                  <pre className="text-[10px] font-mono bg-background border border-border/50 rounded-lg p-3 overflow-x-auto text-muted-foreground">
+{`curl -X POST ${status?.n8n.webhookUrl || "/api/business/webhook/n8n"} \\
+  -H "Content-Type: application/json" \\
+  -d '{"event": "test", "data": {"msg": "hello"}}'`}
+                  </pre>
+                </div>
+              </div>
+            )}
           </div>
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
