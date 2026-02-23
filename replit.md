@@ -46,7 +46,7 @@ A comprehensive Jarvis-like AI assistant platform with Lovable-style code genera
 6. **System prompt customization** - customize AI behavior per session
 7. API key management for external access (generate, toggle, delete)
 8. Dark/light theme toggle
-9. Voice input (Web Speech API) with speech-to-text
+9. Voice input (Web Speech API) with speech-to-text and **auto-send after recognition**
 10. Voice output (Text-to-Speech) with toggle
 11. Continuous conversation mode (auto-listen after response)
 12. Activity logging with source icons

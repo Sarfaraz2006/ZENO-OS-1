@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -12,6 +12,7 @@ import {
   Copy,
   Check,
   Download,
+  RotateCcw,
 } from "lucide-react";
 
 interface CodePreviewProps {
@@ -20,22 +21,24 @@ interface CodePreviewProps {
   onClose: () => void;
 }
 
+function decodeHtmlEntities(text: string): string {
+  const textarea = document.createElement("textarea");
+  textarea.innerHTML = text;
+  return textarea.value;
+}
+
 export function CodePreview({ code, language, onClose }: CodePreviewProps) {
   const [viewport, setViewport] = useState<"desktop" | "tablet" | "mobile">("desktop");
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(true);
   const [copied, setCopied] = useState(false);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [key, setKey] = useState(0);
 
-  const getViewportWidth = () => {
-    switch (viewport) {
-      case "mobile": return "375px";
-      case "tablet": return "768px";
-      case "desktop": return "100%";
-    }
-  };
+  const decodedCode = decodeHtmlEntities(code);
 
-  const getFullHtml = (code: string) => {
-    if (code.includes("<!DOCTYPE") || code.includes("<html")) {
-      return code;
+  const getFullHtml = (rawCode: string) => {
+    if (rawCode.includes("<!DOCTYPE") || rawCode.includes("<html")) {
+      return rawCode;
     }
     return `<!DOCTYPE html>
 <html lang="en">
@@ -48,12 +51,32 @@ export function CodePreview({ code, language, onClose }: CodePreviewProps) {
   </style>
 </head>
 <body>
-${code}
+${rawCode}
 </body>
 </html>`;
   };
 
-  const htmlContent = getFullHtml(code);
+  const htmlContent = getFullHtml(decodedCode);
+
+  useEffect(() => {
+    if (iframeRef.current) {
+      const iframe = iframeRef.current;
+      const doc = iframe.contentDocument || iframe.contentWindow?.document;
+      if (doc) {
+        doc.open();
+        doc.write(htmlContent);
+        doc.close();
+      }
+    }
+  }, [htmlContent, key]);
+
+  const getViewportWidth = () => {
+    switch (viewport) {
+      case "mobile": return "375px";
+      case "tablet": return "768px";
+      case "desktop": return "100%";
+    }
+  };
 
   const openInNewTab = () => {
     const blob = new Blob([htmlContent], { type: "text/html" });
@@ -72,7 +95,7 @@ ${code}
   };
 
   const copyCode = () => {
-    navigator.clipboard.writeText(code);
+    navigator.clipboard.writeText(decodedCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -125,6 +148,9 @@ ${code}
             </Button>
           </div>
 
+          <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => setKey(k => k + 1)} data-testid="button-refresh-preview">
+            <RotateCcw className="w-3.5 h-3.5" />
+          </Button>
           <Button size="icon" variant="ghost" className="w-7 h-7" onClick={copyCode} data-testid="button-copy-preview-code">
             {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
           </Button>
@@ -134,13 +160,7 @@ ${code}
           <Button size="icon" variant="ghost" className="w-7 h-7" onClick={openInNewTab} data-testid="button-open-preview-tab">
             <ExternalLink className="w-3.5 h-3.5" />
           </Button>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="w-7 h-7"
-            onClick={() => setIsFullscreen(!isFullscreen)}
-            data-testid="button-toggle-fullscreen"
-          >
+          <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => setIsFullscreen(!isFullscreen)} data-testid="button-toggle-fullscreen">
             {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
           </Button>
           <Button size="icon" variant="ghost" className="w-7 h-7" onClick={onClose} data-testid="button-close-preview">
@@ -151,20 +171,20 @@ ${code}
 
       <div className="flex-1 bg-[#f5f5f5] dark:bg-[#1a1a1a] flex items-start justify-center overflow-auto p-4">
         <div
-          className="bg-white shadow-lg transition-all duration-300 h-full"
+          className="bg-white shadow-lg transition-all duration-300"
           style={{
             width: getViewportWidth(),
             maxWidth: "100%",
-            minHeight: viewport === "desktop" ? "100%" : "600px",
+            height: viewport === "desktop" ? "calc(100vh - 80px)" : "700px",
           }}
         >
           <iframe
-            srcDoc={htmlContent}
+            ref={iframeRef}
+            key={key}
             className="w-full h-full border-0"
-            sandbox="allow-scripts allow-same-origin"
             title="Code Preview"
             data-testid="iframe-code-preview"
-            style={{ minHeight: viewport === "desktop" ? "100%" : "600px" }}
+            sandbox="allow-scripts"
           />
         </div>
       </div>

@@ -1,42 +1,92 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import rehypeRaw from "rehype-raw";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Button } from "@/components/ui/button";
 import { Copy, Check, Eye } from "lucide-react";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 
 interface MarkdownRendererProps {
   content: string;
   onPreview?: (code: string, language: string) => void;
 }
 
-export function MarkdownRenderer({ content, onPreview }: MarkdownRendererProps) {
-  const [copiedBlock, setCopiedBlock] = useState<number | null>(null);
-  let blockIndex = 0;
+function CodeBlock({
+  language,
+  code,
+  onPreview,
+}: {
+  language: string | undefined;
+  code: string;
+  onPreview?: (code: string, language: string) => void;
+}) {
+  const [copied, setCopied] = useState(false);
 
-  const copyCode = (code: string, idx: number) => {
+  const isPreviewable = language === "html" || language === "htm";
+
+  const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(code);
-    setCopiedBlock(idx);
-    setTimeout(() => setCopiedBlock(null), 2000);
-  };
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [code]);
 
-  const isPreviewable = (lang: string | undefined) => {
-    return lang === "html" || lang === "htm";
-  };
+  return (
+    <div className="relative group my-3 rounded-lg overflow-hidden border border-border/30">
+      <div className="flex items-center justify-between px-3 py-1.5 bg-muted/50 border-b border-border/30">
+        <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+          {language || "code"}
+        </span>
+        <div className="flex items-center gap-1">
+          {isPreviewable && onPreview && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 px-2 text-[10px] gap-1 text-primary"
+              onClick={() => onPreview(code, language || "html")}
+              data-testid="button-preview-code"
+            >
+              <Eye className="w-3 h-3" />
+              Preview
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 px-2 text-[10px] gap-1"
+            onClick={handleCopy}
+            data-testid="button-copy-code"
+          >
+            {copied ? (
+              <><Check className="w-3 h-3" /> Copied</>
+            ) : (
+              <><Copy className="w-3 h-3" /> Copy</>
+            )}
+          </Button>
+        </div>
+      </div>
+      <SyntaxHighlighter
+        style={oneDark}
+        language={language || "text"}
+        PreTag="div"
+        customStyle={{
+          margin: 0,
+          borderRadius: 0,
+          fontSize: "13px",
+          padding: "12px 16px",
+        }}
+      >
+        {code}
+      </SyntaxHighlighter>
+    </div>
+  );
+}
 
-  const extractFullHtml = (code: string, lang: string | undefined) => {
-    if (lang === "html" || lang === "htm") return code;
-    return code;
-  };
-
+export function MarkdownRenderer({ content, onPreview }: MarkdownRendererProps) {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
-      rehypePlugins={[rehypeRaw]}
       components={{
-        code({ node, className, children, ...props }) {
+        code({ node, className, children, ...props }: any) {
           const match = /language-(\w+)/.exec(className || "");
           const language = match ? match[1] : undefined;
           const codeString = String(children).replace(/\n$/, "");
@@ -50,87 +100,46 @@ export function MarkdownRenderer({ content, onPreview }: MarkdownRendererProps) 
             );
           }
 
-          const currentIdx = blockIndex++;
-
           return (
-            <div className="relative group my-3 rounded-lg overflow-hidden border border-border/30">
-              <div className="flex items-center justify-between px-3 py-1.5 bg-muted/50 border-b border-border/30">
-                <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                  {language || "code"}
-                </span>
-                <div className="flex items-center gap-1">
-                  {isPreviewable(language) && onPreview && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-6 px-2 text-[10px] gap-1"
-                      onClick={() => onPreview(extractFullHtml(codeString, language), language || "html")}
-                      data-testid={`button-preview-code-${currentIdx}`}
-                    >
-                      <Eye className="w-3 h-3" />
-                      Preview
-                    </Button>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-6 px-2 text-[10px] gap-1"
-                    onClick={() => copyCode(codeString, currentIdx)}
-                    data-testid={`button-copy-code-${currentIdx}`}
-                  >
-                    {copiedBlock === currentIdx ? (
-                      <><Check className="w-3 h-3" /> Copied</>
-                    ) : (
-                      <><Copy className="w-3 h-3" /> Copy</>
-                    )}
-                  </Button>
-                </div>
-              </div>
-              <SyntaxHighlighter
-                style={oneDark}
-                language={language || "text"}
-                PreTag="div"
-                customStyle={{
-                  margin: 0,
-                  borderRadius: 0,
-                  fontSize: "13px",
-                  padding: "12px 16px",
-                }}
-              >
-                {codeString}
-              </SyntaxHighlighter>
-            </div>
+            <CodeBlock
+              language={language}
+              code={codeString}
+              onPreview={onPreview}
+            />
           );
         },
-        p({ children }) {
+        pre({ children }: any) {
+          return <>{children}</>;
+        },
+        p({ children }: any) {
           return <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>;
         },
-        ul({ children }) {
+        ul({ children }: any) {
           return <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>;
         },
-        ol({ children }) {
+        ol({ children }: any) {
           return <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>;
         },
-        li({ children }) {
+        li({ children }: any) {
           return <li className="leading-relaxed">{children}</li>;
         },
-        h1({ children }) {
+        h1({ children }: any) {
           return <h1 className="text-xl font-bold mb-2 mt-4">{children}</h1>;
         },
-        h2({ children }) {
+        h2({ children }: any) {
           return <h2 className="text-lg font-bold mb-2 mt-3">{children}</h2>;
         },
-        h3({ children }) {
+        h3({ children }: any) {
           return <h3 className="text-base font-semibold mb-1.5 mt-2">{children}</h3>;
         },
-        blockquote({ children }) {
+        blockquote({ children }: any) {
           return (
             <blockquote className="border-l-2 border-primary/30 pl-3 my-2 text-muted-foreground italic">
               {children}
             </blockquote>
           );
         },
-        table({ children }) {
+        table({ children }: any) {
           return (
             <div className="overflow-x-auto my-2">
               <table className="min-w-full text-sm border border-border/30 rounded">
@@ -139,13 +148,13 @@ export function MarkdownRenderer({ content, onPreview }: MarkdownRendererProps) 
             </div>
           );
         },
-        th({ children }) {
+        th({ children }: any) {
           return <th className="px-3 py-1.5 text-left font-medium bg-muted/50 border-b border-border/30">{children}</th>;
         },
-        td({ children }) {
+        td({ children }: any) {
           return <td className="px-3 py-1.5 border-b border-border/20">{children}</td>;
         },
-        a({ href, children }) {
+        a({ href, children }: any) {
           return (
             <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2">
               {children}
@@ -155,7 +164,7 @@ export function MarkdownRenderer({ content, onPreview }: MarkdownRendererProps) 
         hr() {
           return <hr className="my-3 border-border/30" />;
         },
-        strong({ children }) {
+        strong({ children }: any) {
           return <strong className="font-semibold">{children}</strong>;
         },
       }}

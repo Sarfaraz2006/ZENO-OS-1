@@ -91,6 +91,8 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const inputRef = useRef("");
+  const pendingVoiceSendRef = useRef(false);
 
   const { data: conversations = [] } = useQuery<Conversation[]>({
     queryKey: ["/api/conversations"],
@@ -132,6 +134,20 @@ export default function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [activeChat?.messages, streamingContent]);
 
+  useEffect(() => {
+    inputRef.current = input;
+  }, [input]);
+
+  useEffect(() => {
+    if (!isListening && pendingVoiceSendRef.current && inputRef.current.trim()) {
+      pendingVoiceSendRef.current = false;
+      const voiceText = inputRef.current.trim();
+      setTimeout(() => {
+        handleSendMessage(voiceText);
+      }, 300);
+    }
+  }, [isListening]);
+
   const toggleListening = useCallback(() => {
     if (isListening) {
       recognitionRef.current?.stop();
@@ -143,12 +159,35 @@ export default function ChatPage() {
     recognition.continuous = false;
     recognition.interimResults = true;
     recognition.lang = "en-US";
+
+    let finalTranscript = "";
+
     recognition.onresult = (e: any) => {
-      const t = Array.from(e.results).map((r: any) => r[0].transcript).join("");
-      setInput(t);
+      let interim = "";
+      for (let i = 0; i < e.results.length; i++) {
+        const result = e.results[i];
+        if (result.isFinal) {
+          finalTranscript += result[0].transcript;
+        } else {
+          interim += result[0].transcript;
+        }
+      }
+      const fullText = finalTranscript + interim;
+      setInput(fullText);
+      inputRef.current = fullText;
     };
-    recognition.onend = () => setIsListening(false);
-    recognition.onerror = () => setIsListening(false);
+
+    recognition.onend = () => {
+      setIsListening(false);
+      if (inputRef.current.trim()) {
+        pendingVoiceSendRef.current = true;
+      }
+    };
+
+    recognition.onerror = () => {
+      setIsListening(false);
+    };
+
     recognitionRef.current = recognition;
     recognition.start();
     setIsListening(true);
@@ -167,13 +206,14 @@ export default function ChatPage() {
     window.speechSynthesis.speak(u);
   }, [voiceEnabled, continuousMode, toggleListening]);
 
-  const handleSendMessage = async () => {
-    if (!input.trim() || isStreaming) return;
+  const handleSendMessage = async (overrideMessage?: string) => {
+    const msgText = overrideMessage || inputRef.current;
+    if (!msgText.trim() || isStreaming) return;
 
     let convId = activeConversation;
     if (!convId) {
       const res = await apiRequest("POST", "/api/conversations", {
-        title: input.slice(0, 50),
+        title: msgText.slice(0, 50),
       });
       const conv = await res.json();
       convId = conv.id;
@@ -181,8 +221,9 @@ export default function ChatPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
     }
 
-    const message = input.trim();
+    const message = msgText.trim();
     setInput("");
+    inputRef.current = "";
     setIsStreaming(true);
     setStreamingContent("");
 
@@ -376,16 +417,16 @@ export default function ChatPage() {
           </div>
           <div className="flex items-center gap-1">
             <Dialog open={showSystemPrompt} onOpenChange={setShowSystemPrompt}>
-              <DialogTrigger asChild>
-                <Tooltip>
-                  <TooltipTrigger asChild>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DialogTrigger asChild>
                     <Button size="icon" variant="ghost" data-testid="button-system-prompt">
                       <Settings2 className="w-4 h-4" />
                     </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>System prompt</TooltipContent>
-                </Tooltip>
-              </DialogTrigger>
+                  </DialogTrigger>
+                </TooltipTrigger>
+                <TooltipContent>System prompt</TooltipContent>
+              </Tooltip>
               <DialogContent className="max-w-lg">
                 <DialogHeader>
                   <DialogTitle className="flex items-center gap-2">
@@ -635,7 +676,7 @@ export default function ChatPage() {
                 </div>
                 <Button
                   data-testid="button-send-message"
-                  onClick={handleSendMessage}
+                  onClick={() => handleSendMessage()}
                   disabled={!input.trim() || isStreaming}
                   size="sm"
                   className="gap-1.5 h-8"
