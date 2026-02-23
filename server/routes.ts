@@ -717,24 +717,64 @@ export async function registerRoutes(
       const smtpHost = await storage.getSetting("smtp_host");
       const smtpConfigured = !!smtpHost?.value;
       
-      let twilioConnected = false;
-      try {
-        const fs = await import("fs");
-        twilioConnected = fs.existsSync("./server/twilio-client.ts") || fs.existsSync("./server/replit_integrations/twilio");
-      } catch {}
+      const twilioSetting = await storage.getSetting("twilio_connected");
+      const twilioConnected = twilioSetting?.value === "true";
 
-      let stripeConnected = false;
-      try {
-        const fs = await import("fs");
-        stripeConnected = fs.existsSync("./server/stripe-client.ts") || fs.existsSync("./server/replit_integrations/stripe");
-      } catch {}
+      const stripeSetting = await storage.getSetting("stripe_connected");
+      const stripeConnected = stripeSetting?.value === "true";
+
+      const n8nRuns = (await storage.getBusinessMetrics()).find(m => m.metricType === "n8n" && m.metricKey === "runs");
+      const n8nTested = Number(n8nRuns?.metricValue || 0) > 0;
 
       res.json({
-        email: { connected: smtpConfigured, label: smtpConfigured ? "Connected" : "Setup in SMTP above" },
+        email: { connected: smtpConfigured, label: smtpConfigured ? "Connected" : "Not Configured" },
         whatsapp: { connected: twilioConnected, label: twilioConnected ? "Connected" : "Not Connected" },
         stripe: { connected: stripeConnected, label: stripeConnected ? "Connected" : "Not Connected" },
-        n8n: { connected: true, webhookUrl: n8nWebhookUrl, label: "Webhook Ready" },
+        n8n: { connected: n8nTested, webhookUrl: n8nWebhookUrl, label: n8nTested ? "Active" : "Not Tested" },
       });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/integrations/connect", requireAuth, async (req, res) => {
+    try {
+      const { service } = req.body;
+      if (!service) return res.status(400).json({ error: "Service name required" });
+
+      if (service === "twilio") {
+        await storage.upsertSetting("twilio_connected", "pending");
+        await storage.createLog({ action: "Twilio connection requested", details: "WhatsApp integration", source: "integration" });
+        return res.json({ 
+          success: true, 
+          status: "pending",
+          message: "Twilio connection requires OAuth setup. The Replit integration will guide you through the process.",
+          instructions: [
+            "1. Click the 'Connect Twilio' button that will appear in the Replit panel",
+            "2. Sign in to your Twilio account", 
+            "3. Authorize the connection",
+            "4. Once connected, WhatsApp features will be enabled"
+          ]
+        });
+      }
+
+      if (service === "stripe") {
+        await storage.upsertSetting("stripe_connected", "pending");
+        await storage.createLog({ action: "Stripe connection requested", details: "Payment integration", source: "integration" });
+        return res.json({ 
+          success: true, 
+          status: "pending",
+          message: "Stripe connection requires OAuth setup. The Replit integration will guide you through the process.",
+          instructions: [
+            "1. Click the 'Connect Stripe' button that will appear in the Replit panel",
+            "2. Sign in to your Stripe account",
+            "3. Authorize the connection", 
+            "4. Once connected, payment tracking will be enabled"
+          ]
+        });
+      }
+
+      res.status(400).json({ error: `Unknown service: ${service}` });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

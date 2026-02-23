@@ -416,9 +416,9 @@ export default function BusinessPage() {
               },
               {
                 label: "n8n", icon: Workflow, iconColor: "text-violet-500",
-                connected: true,
-                connectedText: "Webhook endpoint active at /api/business/webhook/n8n",
-                disconnectedText: "",
+                connected: integrationStatus?.n8n?.connected ?? false,
+                connectedText: "Webhook active. Automation events being tracked.",
+                disconnectedText: "Webhook ready but not tested yet. Send a POST to connect.",
               },
             ].map((item) => (
               <Card key={item.label} className="hover-elevate">

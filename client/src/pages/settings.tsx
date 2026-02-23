@@ -661,7 +661,16 @@ function IntegrationsSection() {
                 <p className="text-[11px] text-muted-foreground">
                   Twilio integration is available. Connect your Twilio account to enable WhatsApp messaging.
                 </p>
-                <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1.5" onClick={() => toast({ title: "Twilio Setup", description: "Use the Replit integrations panel to connect your Twilio account, then reload this page." })} data-testid="button-connect-twilio">
+                <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1.5" onClick={async () => {
+                  try {
+                    const res = await apiRequest("POST", "/api/integrations/connect", { service: "twilio" });
+                    const data = await res.json();
+                    queryClient.invalidateQueries({ queryKey: ["/api/integrations/status"] });
+                    toast({ title: "Twilio Setup", description: data.message });
+                  } catch (e: any) {
+                    toast({ title: "Connection failed", description: e.message, variant: "destructive" });
+                  }
+                }} data-testid="button-connect-twilio">
                   <ExternalLink className="w-3 h-3" />
                   Connect Twilio
                 </Button>
@@ -687,7 +696,16 @@ function IntegrationsSection() {
                 <p className="text-[11px] text-muted-foreground">
                   Stripe integration is available. Connect your Stripe account to track payments and invoices.
                 </p>
-                <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1.5" onClick={() => toast({ title: "Stripe Setup", description: "Use the Replit integrations panel to connect your Stripe account, then reload this page." })} data-testid="button-connect-stripe">
+                <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1.5" onClick={async () => {
+                  try {
+                    const res = await apiRequest("POST", "/api/integrations/connect", { service: "stripe" });
+                    const data = await res.json();
+                    queryClient.invalidateQueries({ queryKey: ["/api/integrations/status"] });
+                    toast({ title: "Stripe Setup", description: data.message });
+                  } catch (e: any) {
+                    toast({ title: "Connection failed", description: e.message, variant: "destructive" });
+                  }
+                }} data-testid="button-connect-stripe">
                   <ExternalLink className="w-3 h-3" />
                   Connect Stripe
                 </Button>
@@ -710,7 +728,7 @@ function IntegrationsSection() {
                 <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => setN8nExpanded(!n8nExpanded)} data-testid="button-n8n-details">
                   {n8nExpanded ? "Hide" : "Setup"}
                 </Button>
-                {statusBadge(true, "Ready")}
+                {statusBadge(status?.n8n.connected ?? false, status?.n8n.label ?? "Not Tested")}
               </div>
             </div>
             {n8nExpanded && (
