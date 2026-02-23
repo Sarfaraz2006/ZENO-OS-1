@@ -128,6 +128,7 @@ export default function DashboardPage() {
     { label: "GitHub", icon: GitBranch, href: "/github", color: "text-orange-400", bg: "bg-orange-500/10" },
     { label: "Editor", icon: Code2, href: "/editor", color: "text-cyan-400", bg: "bg-cyan-500/10" },
     { label: "Email", icon: Mail, href: "/settings", color: "text-rose-400", bg: "bg-rose-500/10" },
+    { label: "Business", icon: BarChart3, href: "/business", color: "text-pink-400", bg: "bg-pink-500/10" },
   ];
 
   const capabilities = [
@@ -136,7 +137,8 @@ export default function DashboardPage() {
     { title: "Code Generation", desc: "Lovable-style live preview", icon: Code2, status: "live" },
     { title: "REST API", desc: "External access with keys", icon: Globe, status: "live" },
     { title: "GitHub Integration", desc: "Deploy & edit repos", icon: GitBranch, status: "live" },
-    { title: "Email System", desc: "SMTP notifications", icon: Mail, status: "live" },
+    { title: "Email System", desc: "SMTP send & receive", icon: Mail, status: "live" },
+    { title: "Business Board", desc: "Email, WhatsApp, Payments", icon: BarChart3, status: "live" },
   ];
 
   const CustomTooltipArea = ({ active, payload, label }: any) => {

@@ -1,6 +1,7 @@
 import {
   users, aiModels, apiKeys, activityLogs, settings,
   conversations, messages, githubRepos,
+  businessEmails, businessContacts, businessMetrics,
   type User, type InsertUser,
   type AiModel, type InsertAiModel,
   type ApiKey, type InsertApiKey,
@@ -8,6 +9,9 @@ import {
   type Setting, type InsertSetting,
   type Conversation, type Message,
   type GitHubRepo, type InsertGithubRepo,
+  type BusinessEmail, type InsertBusinessEmail,
+  type BusinessContact, type InsertBusinessContact,
+  type BusinessMetric, type InsertBusinessMetric,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, sql } from "drizzle-orm";
@@ -180,6 +184,47 @@ export class DatabaseStorage implements IStorage {
 
   async deleteGithubRepo(id: number): Promise<void> {
     await db.delete(githubRepos).where(eq(githubRepos.id, id));
+  }
+
+  async getBusinessEmails(limit = 50): Promise<BusinessEmail[]> {
+    return db.select().from(businessEmails).orderBy(desc(businessEmails.createdAt)).limit(limit);
+  }
+
+  async createBusinessEmail(email: InsertBusinessEmail): Promise<BusinessEmail> {
+    const [created] = await db.insert(businessEmails).values(email).returning();
+    return created;
+  }
+
+  async getBusinessEmailStats() {
+    const sent = await db.select({ count: sql<number>`count(*)` }).from(businessEmails).where(eq(businessEmails.direction, "sent"));
+    const received = await db.select({ count: sql<number>`count(*)` }).from(businessEmails).where(eq(businessEmails.direction, "received"));
+    const replied = await db.select({ count: sql<number>`count(*)` }).from(businessEmails).where(eq(businessEmails.status, "replied"));
+    return {
+      sent: Number(sent[0]?.count || 0),
+      received: Number(received[0]?.count || 0),
+      replied: Number(replied[0]?.count || 0),
+      total: Number(sent[0]?.count || 0) + Number(received[0]?.count || 0),
+    };
+  }
+
+  async getBusinessContacts(limit = 50): Promise<BusinessContact[]> {
+    return db.select().from(businessContacts).orderBy(desc(businessContacts.lastContact)).limit(limit);
+  }
+
+  async createBusinessContact(contact: InsertBusinessContact): Promise<BusinessContact> {
+    const [created] = await db.insert(businessContacts).values(contact).returning();
+    return created;
+  }
+
+  async getBusinessMetrics(): Promise<BusinessMetric[]> {
+    return db.select().from(businessMetrics).orderBy(desc(businessMetrics.createdAt));
+  }
+
+  async upsertBusinessMetric(type: string, key: string, value: string, period?: string): Promise<BusinessMetric> {
+    const [created] = await db.insert(businessMetrics).values({
+      metricType: type, metricKey: key, metricValue: value, period,
+    }).returning();
+    return created;
   }
 }
 

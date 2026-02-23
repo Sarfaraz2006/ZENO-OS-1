@@ -23,6 +23,7 @@ import {
   Terminal,
   GitBranch,
   Code2,
+  BarChart3,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -36,6 +37,7 @@ const mainNav = [
   { title: "Terminal", url: "/terminal", icon: Terminal },
   { title: "GitHub", url: "/github", icon: GitBranch },
   { title: "Editor", url: "/editor", icon: Code2 },
+  { title: "Business", url: "/business", icon: BarChart3 },
 ];
 
 const systemNav = [

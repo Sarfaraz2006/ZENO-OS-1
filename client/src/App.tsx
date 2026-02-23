@@ -19,6 +19,7 @@ import SettingsPage from "@/pages/settings";
 import TerminalPage from "@/pages/terminal";
 import GitHubPage from "@/pages/github";
 import CodeEditorPage from "@/pages/code-editor";
+import BusinessPage from "@/pages/business";
 
 const ACCENT_OPTIONS: { value: ThemeAccent; label: string; color: string }[] = [
   { value: "blue", label: "Blue", color: "bg-blue-500" },
@@ -77,6 +78,7 @@ function Router() {
       <Route path="/terminal" component={TerminalPage} />
       <Route path="/github" component={GitHubPage} />
       <Route path="/editor" component={CodeEditorPage} />
+      <Route path="/business" component={BusinessPage} />
       <Route path="/settings" component={SettingsPage} />
       <Route component={NotFound} />
     </Switch>

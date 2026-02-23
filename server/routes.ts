@@ -523,10 +523,191 @@ export async function registerRoutes(
         html: body.replace(/\n/g, "<br>"),
       });
 
+      await storage.createBusinessEmail({
+        direction: "sent", fromAddr: from?.value || user.value, toAddr: to,
+        subject, body, status: "sent",
+      });
       await storage.createLog({ action: "Email sent", details: `To: ${to}, Subject: ${subject}`, source: "email" });
       res.json({ success: true, message: "Email sent successfully" });
     } catch (error: any) {
       res.status(500).json({ error: error.message || "Failed to send email" });
+    }
+  });
+
+  app.get("/api/business/stats", requireAuth, async (_req, res) => {
+    try {
+      const emailStats = await storage.getBusinessEmailStats();
+      const contacts = await storage.getBusinessContacts(100);
+      const metrics = await storage.getBusinessMetrics();
+      const whatsappSent = metrics.find(m => m.metricType === "whatsapp" && m.metricKey === "sent");
+      const whatsappReceived = metrics.find(m => m.metricType === "whatsapp" && m.metricKey === "received");
+      const paymentTotal = metrics.find(m => m.metricType === "payment" && m.metricKey === "total");
+      const paymentCount = metrics.find(m => m.metricType === "payment" && m.metricKey === "count");
+      const automations = metrics.find(m => m.metricType === "n8n" && m.metricKey === "workflows");
+      const automationRuns = metrics.find(m => m.metricType === "n8n" && m.metricKey === "runs");
+      res.json({
+        email: emailStats,
+        whatsapp: {
+          sent: Number(whatsappSent?.metricValue || 0),
+          received: Number(whatsappReceived?.metricValue || 0),
+          total: Number(whatsappSent?.metricValue || 0) + Number(whatsappReceived?.metricValue || 0),
+        },
+        payment: {
+          total: Number(paymentTotal?.metricValue || 0),
+          count: Number(paymentCount?.metricValue || 0),
+        },
+        automation: {
+          workflows: Number(automations?.metricValue || 0),
+          runs: Number(automationRuns?.metricValue || 0),
+        },
+        contacts: contacts.length,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/business/emails", requireAuth, async (_req, res) => {
+    try {
+      const emails = await storage.getBusinessEmails(100);
+      res.json(emails);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/business/contacts", requireAuth, async (_req, res) => {
+    try {
+      const contacts = await storage.getBusinessContacts(100);
+      res.json(contacts);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/business/contacts", requireAuth, async (req, res) => {
+    try {
+      const { name, email, phone, source } = req.body;
+      if (!name) return res.status(400).json({ error: "Name required" });
+      const contact = await storage.createBusinessContact({ name, email, phone, source });
+      res.json(contact);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/email/reply", requireAuth, async (req, res) => {
+    try {
+      const { to, subject, body, originalId } = req.body;
+      if (!to || !subject || !body) return res.status(400).json({ error: "to, subject, and body required" });
+
+      const host = await storage.getSetting("smtp_host");
+      const port = await storage.getSetting("smtp_port");
+      const user = await storage.getSetting("smtp_user");
+      const pass = await storage.getSetting("smtp_pass");
+      const from = await storage.getSetting("smtp_from");
+
+      if (!host?.value || !user?.value || !pass?.value) {
+        return res.status(400).json({ error: "SMTP not configured" });
+      }
+
+      const nodemailer = await import("nodemailer");
+      const transporter = nodemailer.createTransport({
+        host: host.value,
+        port: parseInt(port?.value || "587"),
+        secure: parseInt(port?.value || "587") === 465,
+        auth: { user: user.value, pass: pass.value },
+      });
+
+      await transporter.sendMail({
+        from: from?.value || user.value, to,
+        subject: subject.startsWith("Re:") ? subject : `Re: ${subject}`,
+        text: body, html: body.replace(/\n/g, "<br>"),
+      });
+
+      await storage.createBusinessEmail({
+        direction: "sent", fromAddr: from?.value || user.value, toAddr: to,
+        subject: subject.startsWith("Re:") ? subject : `Re: ${subject}`,
+        body, status: "replied", threadId: originalId ? String(originalId) : undefined,
+      });
+
+      await storage.createLog({ action: "Email replied", details: `To: ${to}`, source: "email" });
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to send reply" });
+    }
+  });
+
+  app.post("/api/email/check-inbox", requireAuth, async (_req, res) => {
+    try {
+      const host = await storage.getSetting("smtp_host");
+      const user = await storage.getSetting("smtp_user");
+      const pass = await storage.getSetting("smtp_pass");
+
+      if (!host?.value || !user?.value || !pass?.value) {
+        return res.status(400).json({ error: "SMTP not configured" });
+      }
+
+      const imapHost = host.value.replace("smtp.", "imap.");
+      const { ImapFlow } = await import("imapflow");
+      const client = new ImapFlow({
+        host: imapHost, port: 993, secure: true,
+        auth: { user: user.value, pass: pass.value },
+        logger: false,
+      });
+
+      await client.connect();
+      const lock = await client.getMailboxLock("INBOX");
+      const newEmails: any[] = [];
+
+      try {
+        const msgs = client.fetch({ seq: `${Math.max(1, Number(client.mailbox?.exists || 1) - 9)}:*` }, {
+          envelope: true, source: false,
+        });
+        for await (const msg of msgs) {
+          const env = msg.envelope;
+          if (env) {
+            const fromAddr = env.from?.[0]?.address || "";
+            const toAddr = env.to?.[0]?.address || user.value;
+            newEmails.push({
+              direction: "received",
+              fromAddr,
+              toAddr,
+              subject: env.subject || "(No subject)",
+              status: "received",
+              messageId: env.messageId || undefined,
+            });
+          }
+        }
+      } finally {
+        lock.release();
+      }
+      await client.logout();
+
+      let saved = 0;
+      for (const email of newEmails) {
+        try {
+          await storage.createBusinessEmail(email);
+          saved++;
+        } catch {}
+      }
+
+      res.json({ success: true, fetched: newEmails.length, saved });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to check inbox" });
+    }
+  });
+
+  app.post("/api/business/webhook/n8n", async (req, res) => {
+    try {
+      const { event, data } = req.body;
+      await storage.upsertBusinessMetric("n8n", "runs",
+        String(Number((await storage.getBusinessMetrics()).find(m => m.metricType === "n8n" && m.metricKey === "runs")?.metricValue || 0) + 1)
+      );
+      await storage.createLog({ action: "n8n webhook received", details: event || "automation", source: "n8n" });
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
   });
 

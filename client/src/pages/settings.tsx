@@ -32,6 +32,10 @@ import {
   Save,
   Loader2,
   Bell,
+  MessageCircle,
+  DollarSign,
+  Workflow,
+  ExternalLink,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { ApiKey } from "@shared/schema";
@@ -566,6 +570,61 @@ export default function SettingsPage() {
                 <p>Keys can be enabled/disabled</p>
                 <p>Last used time tracked</p>
               </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-5 space-y-4">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
+              <Workflow className="w-4 h-4 text-violet-500" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-sm">Integrations</h2>
+              <p className="text-xs text-muted-foreground">Connect external services to your JARVIS</p>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between p-3 rounded-lg border border-border/30" data-testid="integration-whatsapp">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                  <MessageCircle className="w-4 h-4 text-emerald-500" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">WhatsApp Business</p>
+                  <p className="text-[11px] text-muted-foreground">Send & receive via Twilio API</p>
+                </div>
+              </div>
+              <Badge variant="outline" className="text-[10px] h-5 text-amber-500 border-amber-500/30">Coming Soon</Badge>
+            </div>
+            <div className="flex items-center justify-between p-3 rounded-lg border border-border/30" data-testid="integration-stripe">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                  <DollarSign className="w-4 h-4 text-blue-500" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Stripe Payments</p>
+                  <p className="text-[11px] text-muted-foreground">Track invoices & payments</p>
+                </div>
+              </div>
+              <Badge variant="outline" className="text-[10px] h-5 text-amber-500 border-amber-500/30">Coming Soon</Badge>
+            </div>
+            <div className="flex items-center justify-between p-3 rounded-lg border border-border/30" data-testid="integration-n8n">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-orange-500/10 flex items-center justify-center">
+                  <Workflow className="w-4 h-4 text-orange-500" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">n8n Automation</p>
+                  <p className="text-[11px] text-muted-foreground">Webhook: POST /api/business/webhook/n8n</p>
+                </div>
+              </div>
+              <Badge variant="outline" className="text-[10px] h-5 text-emerald-500 border-emerald-500/30">
+                <Check className="w-2.5 h-2.5 mr-0.5" />
+                Ready
+              </Badge>
             </div>
           </div>
         </CardContent>

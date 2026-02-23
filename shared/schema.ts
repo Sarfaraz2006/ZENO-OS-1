@@ -62,6 +62,39 @@ export const githubRepos = pgTable("github_repos", {
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
+export const businessEmails = pgTable("business_emails", {
+  id: serial("id").primaryKey(),
+  direction: text("direction").notNull().default("sent"),
+  fromAddr: text("from_addr").notNull(),
+  toAddr: text("to_addr").notNull(),
+  subject: text("subject").notNull(),
+  body: text("body"),
+  status: text("status").notNull().default("sent"),
+  threadId: text("thread_id"),
+  messageId: text("message_id"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const businessContacts = pgTable("business_contacts", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email"),
+  phone: text("phone"),
+  source: text("source").default("email"),
+  lastContact: timestamp("last_contact"),
+  totalMessages: integer("total_messages").default(0),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const businessMetrics = pgTable("business_metrics", {
+  id: serial("id").primaryKey(),
+  metricType: text("metric_type").notNull(),
+  metricKey: text("metric_key").notNull(),
+  metricValue: text("metric_value").notNull().default("0"),
+  period: text("period"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
 export const usersRelations = relations(users, ({ }) => ({}));
 
 export const aiModelsRelations = relations(aiModels, ({ }) => ({}));
@@ -110,3 +143,24 @@ export const insertGithubRepoSchema = createInsertSchema(githubRepos).omit({
 });
 export type GitHubRepo = typeof githubRepos.$inferSelect;
 export type InsertGithubRepo = z.infer<typeof insertGithubRepoSchema>;
+
+export const insertBusinessEmailSchema = createInsertSchema(businessEmails).omit({
+  id: true,
+  createdAt: true,
+});
+export type BusinessEmail = typeof businessEmails.$inferSelect;
+export type InsertBusinessEmail = z.infer<typeof insertBusinessEmailSchema>;
+
+export const insertBusinessContactSchema = createInsertSchema(businessContacts).omit({
+  id: true,
+  createdAt: true,
+});
+export type BusinessContact = typeof businessContacts.$inferSelect;
+export type InsertBusinessContact = z.infer<typeof insertBusinessContactSchema>;
+
+export const insertBusinessMetricSchema = createInsertSchema(businessMetrics).omit({
+  id: true,
+  createdAt: true,
+});
+export type BusinessMetric = typeof businessMetrics.$inferSelect;
+export type InsertBusinessMetric = z.infer<typeof insertBusinessMetricSchema>;
