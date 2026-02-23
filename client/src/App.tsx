@@ -15,6 +15,8 @@ import DashboardPage from "@/pages/dashboard";
 import ChatPage from "@/pages/chat";
 import ModelsPage from "@/pages/models";
 import SettingsPage from "@/pages/settings";
+import TerminalPage from "@/pages/terminal";
+import GitHubPage from "@/pages/github";
 
 function ThemeToggle() {
   const { theme, toggleTheme } = useTheme();
@@ -36,6 +38,8 @@ function Router() {
       <Route path="/" component={DashboardPage} />
       <Route path="/chat" component={ChatPage} />
       <Route path="/models" component={ModelsPage} />
+      <Route path="/terminal" component={TerminalPage} />
+      <Route path="/github" component={GitHubPage} />
       <Route path="/settings" component={SettingsPage} />
       <Route component={NotFound} />
     </Switch>

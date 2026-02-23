@@ -52,6 +52,16 @@ export const settings = pgTable("settings", {
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
+export const githubRepos = pgTable("github_repos", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  repoUrl: text("repo_url").notNull(),
+  branch: text("branch").notNull().default("main"),
+  status: text("status").notNull().default("connected"),
+  lastSync: timestamp("last_sync"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
 export const usersRelations = relations(users, ({ }) => ({}));
 
 export const aiModelsRelations = relations(aiModels, ({ }) => ({}));
@@ -92,3 +102,11 @@ export type ActivityLog = typeof activityLogs.$inferSelect;
 export type InsertActivityLog = z.infer<typeof insertActivityLogSchema>;
 export type Setting = typeof settings.$inferSelect;
 export type InsertSetting = z.infer<typeof insertSettingSchema>;
+
+export const insertGithubRepoSchema = createInsertSchema(githubRepos).omit({
+  id: true,
+  lastSync: true,
+  createdAt: true,
+});
+export type GitHubRepo = typeof githubRepos.$inferSelect;
+export type InsertGithubRepo = z.infer<typeof insertGithubRepoSchema>;

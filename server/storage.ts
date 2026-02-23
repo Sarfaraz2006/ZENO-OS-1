@@ -1,12 +1,13 @@
 import {
   users, aiModels, apiKeys, activityLogs, settings,
-  conversations, messages,
+  conversations, messages, githubRepos,
   type User, type InsertUser,
   type AiModel, type InsertAiModel,
   type ApiKey, type InsertApiKey,
   type ActivityLog, type InsertActivityLog,
   type Setting, type InsertSetting,
   type Conversation, type Message,
+  type GitHubRepo, type InsertGithubRepo,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, sql } from "drizzle-orm";
@@ -40,6 +41,11 @@ export interface IStorage {
   getConversationCount(): Promise<number>;
   getMessageCount(): Promise<number>;
   getModelCount(): Promise<number>;
+
+  getAllGithubRepos(): Promise<GitHubRepo[]>;
+  createGithubRepo(repo: InsertGithubRepo): Promise<GitHubRepo>;
+  updateGithubRepo(id: number, data: Partial<InsertGithubRepo>): Promise<GitHubRepo | undefined>;
+  deleteGithubRepo(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -156,6 +162,24 @@ export class DatabaseStorage implements IStorage {
   async getModelCount(): Promise<number> {
     const result = await db.select({ count: sql<number>`count(*)` }).from(aiModels);
     return Number(result[0]?.count || 0);
+  }
+
+  async getAllGithubRepos(): Promise<GitHubRepo[]> {
+    return db.select().from(githubRepos).orderBy(desc(githubRepos.createdAt));
+  }
+
+  async createGithubRepo(repo: InsertGithubRepo): Promise<GitHubRepo> {
+    const [created] = await db.insert(githubRepos).values(repo).returning();
+    return created;
+  }
+
+  async updateGithubRepo(id: number, data: Partial<InsertGithubRepo>): Promise<GitHubRepo | undefined> {
+    const [updated] = await db.update(githubRepos).set(data).where(eq(githubRepos.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async deleteGithubRepo(id: number): Promise<void> {
+    await db.delete(githubRepos).where(eq(githubRepos.id, id));
   }
 }
 

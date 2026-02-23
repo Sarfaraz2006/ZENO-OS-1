@@ -1,4 +1,4 @@
-import { useLocation, Link } from "wouter";
+import { useLocation, useRoute } from "wouter";
 import {
   Sidebar,
   SidebarContent,
@@ -10,6 +10,7 @@ import {
   SidebarMenuItem,
   SidebarHeader,
   SidebarFooter,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import {
   LayoutDashboard,
@@ -19,6 +20,8 @@ import {
   Zap,
   LogOut,
   Shield,
+  Terminal,
+  GitBranch,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -29,6 +32,8 @@ const mainNav = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Chat", url: "/chat", icon: MessageSquare },
   { title: "Models", url: "/models", icon: Bot },
+  { title: "Terminal", url: "/terminal", icon: Terminal },
+  { title: "GitHub", url: "/github", icon: GitBranch },
 ];
 
 const systemNav = [
@@ -36,28 +41,37 @@ const systemNav = [
 ];
 
 export function AppSidebar() {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const { logout } = useAuth();
+  const { setOpenMobile, isMobile } = useSidebar();
+
+  const handleNavClick = (url: string) => {
+    setLocation(url);
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  };
 
   return (
     <Sidebar>
       <SidebarHeader className="px-4 py-5">
-        <Link href="/">
-          <div className="flex items-center gap-3 cursor-pointer">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 flex items-center justify-center relative">
-              <Zap className="w-5 h-5 text-primary" />
-              <div className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400" />
-            </div>
-            <div>
-              <h2 className="font-bold text-sm tracking-tight" data-testid="text-sidebar-title">
-                J.A.R.V.I.S
-              </h2>
-              <p className="text-[10px] text-muted-foreground tracking-widest uppercase">
-                AI Platform
-              </p>
-            </div>
+        <div
+          className="flex items-center gap-3 cursor-pointer"
+          onClick={() => handleNavClick("/")}
+        >
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 flex items-center justify-center relative">
+            <Zap className="w-5 h-5 text-primary" />
+            <div className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400" />
           </div>
-        </Link>
+          <div>
+            <h2 className="font-bold text-sm tracking-tight" data-testid="text-sidebar-title">
+              J.A.R.V.I.S
+            </h2>
+            <p className="text-[10px] text-muted-foreground tracking-widest uppercase">
+              AI Platform
+            </p>
+          </div>
+        </div>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
@@ -69,14 +83,13 @@ export function AppSidebar() {
               {mainNav.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
-                    asChild
                     data-active={location === item.url}
                     data-testid={`nav-${item.title.toLowerCase()}`}
+                    onClick={() => handleNavClick(item.url)}
+                    className="cursor-pointer"
                   >
-                    <Link href={item.url}>
-                      <item.icon className="w-4 h-4" />
-                      <span>{item.title}</span>
-                    </Link>
+                    <item.icon className="w-4 h-4" />
+                    <span>{item.title}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
@@ -92,14 +105,13 @@ export function AppSidebar() {
               {systemNav.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
-                    asChild
                     data-active={location === item.url}
                     data-testid={`nav-${item.title.toLowerCase()}`}
+                    onClick={() => handleNavClick(item.url)}
+                    className="cursor-pointer"
                   >
-                    <Link href={item.url}>
-                      <item.icon className="w-4 h-4" />
-                      <span>{item.title}</span>
-                    </Link>
+                    <item.icon className="w-4 h-4" />
+                    <span>{item.title}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
@@ -118,7 +130,7 @@ export function AppSidebar() {
         <Button
           variant="ghost"
           className="w-full justify-start gap-2 text-muted-foreground text-xs"
-          onClick={logout}
+          onClick={() => { logout(); if (isMobile) setOpenMobile(false); }}
           data-testid="button-logout"
           size="sm"
         >

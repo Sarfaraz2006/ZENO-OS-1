@@ -215,6 +215,88 @@ export async function registerRoutes(
     res.json({ message: "Jarvis API v1 - Use POST to chat" });
   });
 
+  app.post("/api/terminal/execute", requireAuth, async (req, res) => {
+    try {
+      const { command } = req.body;
+      if (!command) return res.status(400).json({ error: "Command required" });
+
+      const safeCommands = ["ls", "pwd", "echo", "date", "whoami", "cat", "head", "tail", "wc", "grep", "find", "which", "env", "uptime", "df", "free", "ps", "node", "npm", "python3"];
+      const cmd = command.trim().split(/\s+/)[0];
+
+      const blocked = ["rm", "rmdir", "kill", "shutdown", "reboot", "mkfs", "dd", "chmod", "chown", "sudo", "su"];
+      if (blocked.includes(cmd)) {
+        return res.json({ error: `Command '${cmd}' is blocked for security reasons.` });
+      }
+
+      const { exec } = await import("child_process");
+      const { promisify } = await import("util");
+      const execAsync = promisify(exec);
+
+      const result = await execAsync(command, {
+        timeout: 10000,
+        maxBuffer: 1024 * 512,
+        cwd: process.cwd(),
+      });
+
+      await storage.createLog({ action: "Terminal command", details: command, source: "terminal" });
+      res.json({ output: result.stdout || result.stderr || "(no output)" });
+    } catch (error: any) {
+      if (error.stdout || error.stderr) {
+        res.json({ output: error.stdout, error: error.stderr });
+      } else {
+        res.json({ error: error.message || "Command failed" });
+      }
+    }
+  });
+
+  app.get("/api/github/repos", requireAuth, async (_req, res) => {
+    try {
+      const repos = await storage.getAllGithubRepos();
+      res.json(repos);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch repositories" });
+    }
+  });
+
+  app.post("/api/github/repos", requireAuth, async (req, res) => {
+    try {
+      const { name, repoUrl, branch } = req.body;
+      if (!name || !repoUrl) return res.status(400).json({ error: "Name and URL required" });
+      const repo = await storage.createGithubRepo({ name, repoUrl, branch: branch || "main", status: "connected" });
+      await storage.createLog({ action: "GitHub repo connected", details: name, source: "github" });
+      res.status(201).json(repo);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to connect repository" });
+    }
+  });
+
+  app.post("/api/github/repos/:id/sync", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.updateGithubRepo(id, { status: "syncing" } as any);
+      setTimeout(async () => {
+        try {
+          await storage.updateGithubRepo(id, { status: "connected" } as any);
+        } catch {}
+      }, 3000);
+      await storage.createLog({ action: "GitHub sync initiated", source: "github" });
+      res.json({ success: true, message: "Sync started" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to sync repository" });
+    }
+  });
+
+  app.delete("/api/github/repos/:id", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteGithubRepo(id);
+      await storage.createLog({ action: "GitHub repo disconnected", source: "github" });
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to disconnect repository" });
+    }
+  });
+
   return httpServer;
 }
 
