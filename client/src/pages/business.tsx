@@ -48,6 +48,15 @@ import {
   CheckCircle2,
   AlertCircle,
   ExternalLink,
+  Brain,
+  Sparkles,
+  ShieldAlert,
+  Lightbulb,
+  Target,
+  Activity,
+  Heart,
+  MessageSquare,
+  Zap,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -80,6 +89,23 @@ interface BusinessContact {
   lastContact: string | null;
 }
 
+interface BrainInsight {
+  type: "opportunity" | "warning" | "trend" | "suggestion" | "summary";
+  title: string;
+  detail: string;
+  priority: "high" | "medium" | "low";
+  category: "email" | "whatsapp" | "payment" | "automation" | "contacts" | "general";
+  action?: string;
+}
+
+interface BrainAnalysis {
+  overallHealth: number;
+  healthLabel: string;
+  insights: BrainInsight[];
+  summary: string;
+  generatedAt: string;
+}
+
 const EMAIL_CHART_DATA = [
   { name: "Mon", sent: 3, received: 5 },
   { name: "Tue", sent: 5, received: 8 },
@@ -99,7 +125,7 @@ const CHANNEL_DATA = [
 
 export default function BusinessPage() {
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<"overview" | "emails" | "contacts">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "emails" | "contacts" | "brain">("overview");
   const [replyDialog, setReplyDialog] = useState<BusinessEmail | null>(null);
   const [replyBody, setReplyBody] = useState("");
   const [composeDialog, setComposeDialog] = useState(false);
@@ -110,6 +136,8 @@ export default function BusinessPage() {
   const [contactName, setContactName] = useState("");
   const [contactEmail, setContactEmail] = useState("");
   const [contactPhone, setContactPhone] = useState("");
+  const [brainQuestion, setBrainQuestion] = useState("");
+  const [brainAnswer, setBrainAnswer] = useState<BrainAnalysis | null>(null);
 
   const { data: integrationStatus } = useQuery<{ email: { connected: boolean }; whatsapp: { connected: boolean }; stripe: { connected: boolean }; n8n: { connected: boolean } }>({
     queryKey: ["/api/integrations/status"],
@@ -125,6 +153,40 @@ export default function BusinessPage() {
 
   const { data: contacts = [] } = useQuery<BusinessContact[]>({
     queryKey: ["/api/business/contacts"],
+  });
+
+  const { data: brainAnalysis, isLoading: brainLoading, refetch: refetchBrain } = useQuery<BrainAnalysis>({
+    queryKey: ["/api/brain/analyze"],
+    enabled: activeTab === "brain",
+    staleTime: 60000,
+  });
+
+  const askBrain = useMutation({
+    mutationFn: async (question: string) => {
+      const res = await apiRequest("POST", "/api/brain/ask", { question });
+      return res.json();
+    },
+    onSuccess: (data: BrainAnalysis) => {
+      setBrainAnswer(data);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Brain analysis failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deepAnalyze = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("GET", "/api/brain/analyze?mode=ai");
+      return res.json();
+    },
+    onSuccess: (data: BrainAnalysis) => {
+      setBrainAnswer(data);
+      queryClient.invalidateQueries({ queryKey: ["/api/brain/analyze"] });
+      toast({ title: "Deep analysis complete" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Deep analysis failed", description: error.message, variant: "destructive" });
+    },
   });
 
   const checkInbox = useMutation({
@@ -257,6 +319,7 @@ export default function BusinessPage() {
     { id: "overview" as const, label: "Overview" },
     { id: "emails" as const, label: "Emails" },
     { id: "contacts" as const, label: "Contacts" },
+    { id: "brain" as const, label: "Business Brain" },
   ];
 
   return (
@@ -594,6 +657,225 @@ export default function BusinessPage() {
             )}
           </CardContent>
         </Card>
+      )}
+
+      {activeTab === "brain" && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <Card className="lg:col-span-1">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 border border-violet-500/20 flex items-center justify-center">
+                    <Brain className="w-5 h-5 text-violet-500" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-sm">Business Brain</h3>
+                    <p className="text-[11px] text-muted-foreground">AI-powered intelligence</p>
+                  </div>
+                </div>
+
+                {brainLoading ? (
+                  <div className="flex flex-col items-center py-8 gap-3">
+                    <Loader2 className="w-8 h-8 animate-spin text-violet-500" />
+                    <p className="text-xs text-muted-foreground">Analyzing your business...</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="relative mb-4">
+                      <div className="flex items-center justify-center">
+                        <div className="relative w-32 h-32">
+                          <svg className="w-32 h-32 -rotate-90" viewBox="0 0 120 120">
+                            <circle cx="60" cy="60" r="50" fill="none" stroke="hsl(var(--border))" strokeWidth="8" strokeOpacity="0.3" />
+                            <circle
+                              cx="60" cy="60" r="50" fill="none"
+                              stroke={
+                                (brainAnswer?.overallHealth ?? brainAnalysis?.overallHealth ?? 50) >= 70 ? "#22c55e" :
+                                (brainAnswer?.overallHealth ?? brainAnalysis?.overallHealth ?? 50) >= 45 ? "#f59e0b" : "#ef4444"
+                              }
+                              strokeWidth="8"
+                              strokeLinecap="round"
+                              strokeDasharray={`${((brainAnswer?.overallHealth ?? brainAnalysis?.overallHealth ?? 50) / 100) * 314} 314`}
+                            />
+                          </svg>
+                          <div className="absolute inset-0 flex flex-col items-center justify-center">
+                            <span className="text-3xl font-bold" data-testid="text-brain-score">
+                              {brainAnswer?.overallHealth ?? brainAnalysis?.overallHealth ?? "--"}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground font-medium">
+                              {brainAnswer?.healthLabel ?? brainAnalysis?.healthLabel ?? "Loading"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 mb-4">
+                      <Button
+                        size="sm"
+                        className="w-full gap-2 text-xs h-8"
+                        onClick={() => deepAnalyze.mutate()}
+                        disabled={deepAnalyze.isPending}
+                        data-testid="button-deep-analyze"
+                      >
+                        {deepAnalyze.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                        Deep AI Analysis
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full gap-2 text-xs h-8"
+                        onClick={() => refetchBrain()}
+                        data-testid="button-refresh-brain"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        Refresh Insights
+                      </Button>
+                    </div>
+
+                    <p className="text-[11px] text-muted-foreground text-center">
+                      {brainAnswer?.summary ?? brainAnalysis?.summary ?? "Click analyze to get insights"}
+                    </p>
+                    {(brainAnswer?.generatedAt ?? brainAnalysis?.generatedAt) && (
+                      <p className="text-[10px] text-muted-foreground/60 text-center mt-1">
+                        Updated: {new Date(brainAnswer?.generatedAt ?? brainAnalysis?.generatedAt ?? "").toLocaleTimeString()}
+                      </p>
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="lg:col-span-2">
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Lightbulb className="w-4 h-4 text-amber-500" />
+                    <h3 className="font-semibold text-sm">Insights & Suggestions</h3>
+                    <Badge variant="outline" className="text-[10px] h-5">
+                      {(brainAnswer?.insights ?? brainAnalysis?.insights ?? []).length}
+                    </Badge>
+                  </div>
+                </div>
+
+                {brainLoading ? (
+                  <div className="space-y-3">
+                    {[1, 2, 3].map(i => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}
+                  </div>
+                ) : (brainAnswer?.insights ?? brainAnalysis?.insights ?? []).length === 0 ? (
+                  <div className="text-center py-12">
+                    <Brain className="w-10 h-10 text-muted-foreground/20 mx-auto mb-3" />
+                    <p className="text-sm text-muted-foreground">No insights yet</p>
+                    <p className="text-xs text-muted-foreground/60 mt-1">Click "Deep AI Analysis" to generate business intelligence</p>
+                  </div>
+                ) : (
+                  <ScrollArea className="h-[400px]">
+                    <div className="space-y-2 pr-2">
+                      {(brainAnswer?.insights ?? brainAnalysis?.insights ?? []).map((insight, idx) => {
+                        const typeConfig = {
+                          opportunity: { icon: Target, color: "text-emerald-500", bg: "bg-emerald-500/10", border: "border-emerald-500/20", label: "Opportunity" },
+                          warning: { icon: ShieldAlert, color: "text-red-500", bg: "bg-red-500/10", border: "border-red-500/20", label: "Warning" },
+                          trend: { icon: TrendingUp, color: "text-blue-500", bg: "bg-blue-500/10", border: "border-blue-500/20", label: "Trend" },
+                          suggestion: { icon: Lightbulb, color: "text-amber-500", bg: "bg-amber-500/10", border: "border-amber-500/20", label: "Suggestion" },
+                          summary: { icon: Activity, color: "text-violet-500", bg: "bg-violet-500/10", border: "border-violet-500/20", label: "Summary" },
+                        };
+                        const cfg = typeConfig[insight.type] || typeConfig.suggestion;
+                        const Icon = cfg.icon;
+                        const priorityColor = insight.priority === "high" ? "text-red-500 border-red-500/30" : insight.priority === "medium" ? "text-amber-500 border-amber-500/30" : "text-muted-foreground border-border/50";
+                        const categoryIcons: Record<string, any> = {
+                          email: Mail, whatsapp: MessageCircle, payment: DollarSign, automation: Workflow, contacts: Users, general: Zap,
+                        };
+                        const CatIcon = categoryIcons[insight.category] || Zap;
+
+                        return (
+                          <div key={idx} className={`p-3 rounded-xl border ${cfg.border} ${cfg.bg} transition-colors hover:opacity-90`} data-testid={`brain-insight-${idx}`}>
+                            <div className="flex items-start gap-3">
+                              <div className={`w-8 h-8 rounded-lg ${cfg.bg} flex items-center justify-center shrink-0 mt-0.5`}>
+                                <Icon className={`w-4 h-4 ${cfg.color}`} />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                  <span className="text-xs font-semibold">{insight.title}</span>
+                                  <Badge variant="outline" className={`text-[9px] h-4 ${priorityColor}`}>{insight.priority}</Badge>
+                                  <Badge variant="outline" className="text-[9px] h-4 gap-0.5">
+                                    <CatIcon className="w-2 h-2" />
+                                    {insight.category}
+                                  </Badge>
+                                </div>
+                                <p className="text-[11px] text-muted-foreground leading-relaxed">{insight.detail}</p>
+                                {insight.action && (
+                                  <p className="text-[10px] text-primary font-medium mt-1.5 flex items-center gap-1">
+                                    <ArrowUpRight className="w-2.5 h-2.5" />
+                                    {insight.action}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </ScrollArea>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardContent className="p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <MessageSquare className="w-4 h-4 text-primary" />
+                <h3 className="font-semibold text-sm">Ask Business Brain</h3>
+              </div>
+              <p className="text-xs text-muted-foreground mb-3">
+                Ask any business question and the AI will analyze your data to give you a smart answer.
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  data-testid="input-brain-question"
+                  placeholder="e.g., How can I improve my email response rate?"
+                  value={brainQuestion}
+                  onChange={(e) => setBrainQuestion(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && brainQuestion.trim()) {
+                      askBrain.mutate(brainQuestion.trim());
+                    }
+                  }}
+                  className="h-9 text-sm flex-1"
+                />
+                <Button
+                  data-testid="button-ask-brain"
+                  size="sm"
+                  className="gap-2 text-xs h-9 px-4"
+                  disabled={!brainQuestion.trim() || askBrain.isPending}
+                  onClick={() => askBrain.mutate(brainQuestion.trim())}
+                >
+                  {askBrain.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Brain className="w-3 h-3" />}
+                  Ask
+                </Button>
+              </div>
+              <div className="flex gap-1.5 mt-2 flex-wrap">
+                {[
+                  "What should I focus on today?",
+                  "How is my email performance?",
+                  "What integrations should I set up next?",
+                  "Give me a business growth strategy",
+                ].map((q, idx) => (
+                  <button
+                    key={q}
+                    className="text-[10px] px-2.5 py-1 rounded-full border border-border/40 text-muted-foreground hover:text-foreground hover:border-border/60 transition-colors"
+                    onClick={() => {
+                      setBrainQuestion(q);
+                      askBrain.mutate(q);
+                    }}
+                    data-testid={`button-quick-q-${idx}`}
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       <Dialog open={composeDialog} onOpenChange={setComposeDialog}>

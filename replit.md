@@ -71,11 +71,13 @@ A comprehensive Jarvis-like AI assistant platform with Lovable-style code genera
 26. **WhatsApp Integration** - Manual Twilio credentials (SID, Auth Token, Phone) - user dismissed Replit OAuth
 27. **Stripe Integration** - Manual API key entry (Secret Key, Webhook Secret) - user dismissed Replit OAuth
 28. **n8n Webhook** - POST /api/business/webhook/n8n - status shows "Not Tested" until first webhook received
+29. **Business Brain** - AI-powered business intelligence: health score, rule-based + AI insights, "Ask Brain" Q&A, quick questions
 
 ## Business Board
 - Overview tab: Email/WhatsApp/Payment/Automation stat cards, email activity chart, channel distribution pie chart, integration status cards, recent emails
 - Emails tab: Full inbox/outbox list with compose and reply dialogs
 - Contacts tab: Business contacts with add/manage functionality
+- Brain tab: Health score circle, insight cards (opportunity/warning/trend/suggestion), Deep AI Analysis, Ask Brain Q&A with quick questions
 - Compose email: Send new emails via configured SMTP
 - Check inbox: Fetch emails via IMAP (auto-derives IMAP host from SMTP host)
 - Reply: Reply to received emails with thread tracking

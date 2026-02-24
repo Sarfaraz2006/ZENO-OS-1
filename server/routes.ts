@@ -4,6 +4,7 @@ import session from "express-session";
 import { storage } from "./storage";
 import { registerChatRoutes } from "./replit_integrations/chat";
 import { randomBytes, createHash } from "crypto";
+import { analyzeBusinessWithRules, analyzeBusinessWithAI, getBusinessContextForChat } from "./business-brain";
 
 function hashPassword(password: string): string {
   return createHash("sha256").update(password).digest("hex");
@@ -768,6 +769,51 @@ export async function registerRoutes(
       }
 
       res.status(400).json({ error: `Unknown service: ${service}` });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/brain/analyze", requireAuth, async (req, res) => {
+    try {
+      const mode = req.query.mode as string;
+      if (mode && mode !== "ai" && mode !== "rules") {
+        return res.status(400).json({ error: "Invalid mode. Use 'ai' or 'rules'." });
+      }
+      if (mode === "ai") {
+        const analysis = await analyzeBusinessWithAI();
+        res.json(analysis);
+      } else {
+        const analysis = await analyzeBusinessWithRules();
+        res.json(analysis);
+      }
+    } catch (error: any) {
+      console.error("Brain analysis error:", error);
+      res.status(500).json({ error: error.message || "Brain analysis failed" });
+    }
+  });
+
+  app.post("/api/brain/ask", requireAuth, async (req, res) => {
+    try {
+      const { question } = req.body;
+      if (!question || typeof question !== "string" || question.trim().length === 0) {
+        return res.status(400).json({ error: "Question is required" });
+      }
+      if (question.length > 500) {
+        return res.status(400).json({ error: "Question too long (max 500 characters)" });
+      }
+      const analysis = await analyzeBusinessWithAI(question.trim());
+      res.json(analysis);
+    } catch (error: any) {
+      console.error("Brain ask error:", error);
+      res.status(500).json({ error: error.message || "Brain question failed" });
+    }
+  });
+
+  app.get("/api/brain/context", requireAuth, async (req, res) => {
+    try {
+      const context = await getBusinessContextForChat();
+      res.json({ context });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
