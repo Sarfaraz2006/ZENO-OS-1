@@ -5,6 +5,9 @@ import { storage } from "./storage";
 import { registerChatRoutes } from "./replit_integrations/chat";
 import { randomBytes, createHash } from "crypto";
 import { analyzeBusinessWithRules, analyzeBusinessWithAI, getBusinessContextForChat } from "./business-brain";
+import { scrapeAndSaveLeads } from "./lead-scraper";
+import { startEmailQueueWorker, queueEmailsForLeads } from "./email-queue";
+import { detectTaskType, selectModelForTask, getTaskLabel } from "./model-router";
 
 function hashPassword(password: string): string {
   return createHash("sha256").update(password).digest("hex");
@@ -832,6 +835,269 @@ export async function registerRoutes(
     }
   });
 
+  // === WORKSPACE ROUTES ===
+  app.get("/api/workspaces", requireAuth, async (_req, res) => {
+    try {
+      const ws = await storage.getAllWorkspaces();
+      res.json(ws);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/workspaces", requireAuth, async (req, res) => {
+    try {
+      const { name, type, icon, color } = req.body;
+      if (!name) return res.status(400).json({ error: "Workspace name required" });
+      const ws = await storage.createWorkspace({ name, type: type || "general", icon, color });
+      await storage.createLog({ action: "[ZENO] Workspace Created", details: name, source: "workspace" });
+      res.status(201).json(ws);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/workspaces/:id", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const updated = await storage.updateWorkspace(id, req.body);
+      if (!updated) return res.status(404).json({ error: "Workspace not found" });
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/workspaces/:id", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteWorkspace(id);
+      res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // === LEADS ROUTES ===
+  app.get("/api/leads", requireAuth, async (req, res) => {
+    try {
+      const workspaceId = req.query.workspaceId ? parseInt(req.query.workspaceId as string) : undefined;
+      const leads = await storage.getBusinessLeads(workspaceId);
+      res.json(leads);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/leads", requireAuth, async (req, res) => {
+    try {
+      const { name, email, phone, company, website, status, source, notes, workspaceId } = req.body;
+      if (!name) return res.status(400).json({ error: "Lead name required" });
+      const lead = await storage.createBusinessLead({
+        name, email, phone, company, website, status: status || "new",
+        source: source || "manual", notes, workspaceId,
+      });
+      res.status(201).json(lead);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/leads/:id", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const updated = await storage.updateBusinessLead(id, req.body);
+      if (!updated) return res.status(404).json({ error: "Lead not found" });
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/leads/:id", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteBusinessLead(id);
+      res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // === LEAD SCRAPER ===
+  app.post("/api/leads/scrape", requireAuth, async (req, res) => {
+    try {
+      const { query, workspaceId } = req.body;
+      if (!query) return res.status(400).json({ error: "Search query required" });
+      await storage.createLog({
+        action: `[ZENO] Scouting for ${query}...`,
+        details: `Starting lead search`,
+        source: "scraper",
+        workspaceId,
+      });
+      const saved = await scrapeAndSaveLeads(query, workspaceId);
+      res.json({ success: true, leadsFound: saved, message: `Found and saved ${saved} leads` });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Scraping failed" });
+    }
+  });
+
+  // === EMAIL QUEUE ===
+  app.get("/api/email-queue", requireAuth, async (req, res) => {
+    try {
+      const workspaceId = req.query.workspaceId ? parseInt(req.query.workspaceId as string) : undefined;
+      const status = req.query.status as string;
+      const queue = await storage.getEmailQueue(workspaceId, status);
+      res.json(queue);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/email-queue", requireAuth, async (req, res) => {
+    try {
+      const { toAddr, subject, body, workspaceId, leadId } = req.body;
+      if (!toAddr || !subject || !body) return res.status(400).json({ error: "toAddr, subject, and body required" });
+      const item = await storage.createEmailQueueItem({
+        toAddr, subject, body, status: "pending",
+        scheduledAt: new Date(),
+        workspaceId, leadId,
+      });
+      res.status(201).json(item);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/email-queue/bulk", requireAuth, async (req, res) => {
+    try {
+      const { leadIds, subject, bodyTemplate, workspaceId } = req.body;
+      if (!leadIds?.length || !subject || !bodyTemplate) {
+        return res.status(400).json({ error: "leadIds, subject, and bodyTemplate required" });
+      }
+      const queued = await queueEmailsForLeads(leadIds, subject, bodyTemplate, workspaceId);
+      res.json({ success: true, queued, message: `${queued} emails queued with human-like delays` });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // === INTELLIGENCE ROUTER ===
+  app.post("/api/intelligence/route", requireAuth, async (req, res) => {
+    try {
+      const { message, preferredModel } = req.body;
+      if (!message) return res.status(400).json({ error: "Message required" });
+      const taskType = detectTaskType(message);
+      const modelId = await selectModelForTask(taskType, preferredModel);
+      res.json({ taskType, taskLabel: getTaskLabel(taskType), selectedModel: modelId });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // === STRIPE WEBHOOK ===
+  app.post("/api/stripe/webhook", async (req, res) => {
+    try {
+      const event = req.body;
+      if (!event?.type) return res.status(400).json({ error: "Invalid event" });
+
+      if (event.type === "checkout.session.completed") {
+        const session = event.data?.object;
+        const email = session?.customer_email || session?.customer_details?.email;
+        const amount = (session?.amount_total || 0) / 100;
+
+        if (email) {
+          const leads = await storage.getBusinessLeads();
+          const matchedLead = leads.find(l => l.email === email);
+          if (matchedLead) {
+            await storage.updateBusinessLead(matchedLead.id, { status: "client" });
+          }
+        }
+
+        const currentTotal = (await storage.getBusinessMetrics()).find(
+          m => m.metricType === "payment" && m.metricKey === "total"
+        );
+        const newTotal = Number(currentTotal?.metricValue || 0) + amount;
+        await storage.upsertBusinessMetric("payment", "total", String(newTotal));
+
+        const currentCount = (await storage.getBusinessMetrics()).find(
+          m => m.metricType === "payment" && m.metricKey === "count"
+        );
+        const newCount = Number(currentCount?.metricValue || 0) + 1;
+        await storage.upsertBusinessMetric("payment", "count", String(newCount));
+
+        await storage.createLog({
+          action: `[ZENO] Payment Received ($${amount})`,
+          details: `From: ${email || "unknown"} | Session: ${session?.id}`,
+          source: "stripe",
+        });
+      }
+
+      res.json({ received: true });
+    } catch (error: any) {
+      console.error("Stripe webhook error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // === LIVE ACTIVITY FEED (SSE) ===
+  app.get("/api/activity/stream", requireAuth, (req, res) => {
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+
+    const sendLogs = async () => {
+      try {
+        const logs = await storage.getRecentLogs(10);
+        res.write(`data: ${JSON.stringify(logs)}\n\n`);
+      } catch {}
+    };
+
+    sendLogs();
+    const interval = setInterval(sendLogs, 5000);
+
+    req.on("close", () => {
+      clearInterval(interval);
+    });
+  });
+
+  // === VOICE COMMAND HANDLER ===
+  app.post("/api/voice/command", requireAuth, async (req, res) => {
+    try {
+      const { command, workspaceId } = req.body;
+      if (!command) return res.status(400).json({ error: "Command required" });
+
+      const lower = command.toLowerCase();
+
+      if (lower.includes("start scouting") || lower.includes("find leads") || lower.includes("search for")) {
+        const query = command.replace(/start scouting|find leads|search for/gi, "").trim();
+        if (!query) return res.json({ action: "scrape", status: "need_query", message: "What should I search for?" });
+        const saved = await scrapeAndSaveLeads(query, workspaceId);
+        return res.json({ action: "scrape", status: "complete", message: `Found ${saved} leads for "${query}"` });
+      }
+
+      if (lower.includes("check email") || lower.includes("check inbox")) {
+        return res.json({ action: "check_inbox", status: "trigger", message: "Checking inbox..." });
+      }
+
+      if (lower.includes("send emails") || lower.includes("start outreach")) {
+        return res.json({ action: "email_queue", status: "trigger", message: "Starting email outreach..." });
+      }
+
+      if (lower.includes("business health") || lower.includes("brain analysis")) {
+        const analysis = await analyzeBusinessWithRules();
+        return res.json({ action: "brain", status: "complete", data: analysis });
+      }
+
+      return res.json({ action: "unknown", status: "chat", message: `I'll process: "${command}"` });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Start email queue worker
+  startEmailQueueWorker();
+
   return httpServer;
 }
 
@@ -841,6 +1107,13 @@ async function ensureDefaultUser() {
     await storage.upsertSetting("master_password", hashPassword("admin"));
   }
   await seedDefaultModels();
+  await ensureDefaultWorkspace();
+}
+
+async function ensureDefaultWorkspace() {
+  const existing = await storage.getAllWorkspaces();
+  if (existing.length > 0) return;
+  await storage.createWorkspace({ name: "General Business", type: "general", icon: "briefcase", color: "blue" });
 }
 
 async function seedDefaultModels() {

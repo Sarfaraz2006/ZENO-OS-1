@@ -13,6 +13,16 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
+export const workspaces = pgTable("workspaces", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  type: text("type").notNull().default("general"),
+  icon: text("icon").default("briefcase"),
+  color: text("color").default("blue"),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
 export const aiModels = pgTable("ai_models", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -25,6 +35,7 @@ export const aiModels = pgTable("ai_models", {
   isEnabled: boolean("is_enabled").default(true).notNull(),
   isFavorite: boolean("is_favorite").default(false).notNull(),
   category: text("category").default("general"),
+  role: text("role").default("general"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
@@ -42,6 +53,7 @@ export const activityLogs = pgTable("activity_logs", {
   action: text("action").notNull(),
   details: text("details"),
   source: text("source").default("dashboard"),
+  workspaceId: integer("workspace_id"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
@@ -64,6 +76,7 @@ export const githubRepos = pgTable("github_repos", {
 
 export const businessEmails = pgTable("business_emails", {
   id: serial("id").primaryKey(),
+  workspaceId: integer("workspace_id"),
   direction: text("direction").notNull().default("sent"),
   fromAddr: text("from_addr").notNull(),
   toAddr: text("to_addr").notNull(),
@@ -77,6 +90,7 @@ export const businessEmails = pgTable("business_emails", {
 
 export const businessContacts = pgTable("business_contacts", {
   id: serial("id").primaryKey(),
+  workspaceId: integer("workspace_id"),
   name: text("name").notNull(),
   email: text("email"),
   phone: text("phone"),
@@ -88,10 +102,41 @@ export const businessContacts = pgTable("business_contacts", {
 
 export const businessMetrics = pgTable("business_metrics", {
   id: serial("id").primaryKey(),
+  workspaceId: integer("workspace_id"),
   metricType: text("metric_type").notNull(),
   metricKey: text("metric_key").notNull(),
   metricValue: text("metric_value").notNull().default("0"),
   period: text("period"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const businessLeads = pgTable("business_leads", {
+  id: serial("id").primaryKey(),
+  workspaceId: integer("workspace_id"),
+  name: text("name").notNull(),
+  email: text("email"),
+  phone: text("phone"),
+  company: text("company"),
+  website: text("website"),
+  status: text("status").notNull().default("new"),
+  source: text("source").default("manual"),
+  score: integer("score").default(0),
+  notes: text("notes"),
+  lastContactedAt: timestamp("last_contacted_at"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const emailQueue = pgTable("email_queue", {
+  id: serial("id").primaryKey(),
+  workspaceId: integer("workspace_id"),
+  toAddr: text("to_addr").notNull(),
+  subject: text("subject").notNull(),
+  body: text("body").notNull(),
+  status: text("status").notNull().default("pending"),
+  scheduledAt: timestamp("scheduled_at"),
+  sentAt: timestamp("sent_at"),
+  error: text("error"),
+  leadId: integer("lead_id"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
@@ -100,6 +145,11 @@ export const usersRelations = relations(users, ({ }) => ({}));
 export const aiModelsRelations = relations(aiModels, ({ }) => ({}));
 
 export const insertUserSchema = createInsertSchema(users).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertWorkspaceSchema = createInsertSchema(workspaces).omit({
   id: true,
   createdAt: true,
 });
@@ -127,6 +177,8 @@ export const insertSettingSchema = createInsertSchema(settings).omit({
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+export type Workspace = typeof workspaces.$inferSelect;
+export type InsertWorkspace = z.infer<typeof insertWorkspaceSchema>;
 export type AiModel = typeof aiModels.$inferSelect;
 export type InsertAiModel = z.infer<typeof insertAiModelSchema>;
 export type ApiKey = typeof apiKeys.$inferSelect;
@@ -164,3 +216,17 @@ export const insertBusinessMetricSchema = createInsertSchema(businessMetrics).om
 });
 export type BusinessMetric = typeof businessMetrics.$inferSelect;
 export type InsertBusinessMetric = z.infer<typeof insertBusinessMetricSchema>;
+
+export const insertBusinessLeadSchema = createInsertSchema(businessLeads).omit({
+  id: true,
+  createdAt: true,
+});
+export type BusinessLead = typeof businessLeads.$inferSelect;
+export type InsertBusinessLead = z.infer<typeof insertBusinessLeadSchema>;
+
+export const insertEmailQueueSchema = createInsertSchema(emailQueue).omit({
+  id: true,
+  createdAt: true,
+});
+export type EmailQueueItem = typeof emailQueue.$inferSelect;
+export type InsertEmailQueueItem = z.infer<typeof insertEmailQueueSchema>;

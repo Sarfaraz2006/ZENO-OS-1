@@ -2,6 +2,7 @@ import {
   users, aiModels, apiKeys, activityLogs, settings,
   conversations, messages, githubRepos,
   businessEmails, businessContacts, businessMetrics,
+  workspaces, businessLeads, emailQueue,
   type User, type InsertUser,
   type AiModel, type InsertAiModel,
   type ApiKey, type InsertApiKey,
@@ -12,14 +13,23 @@ import {
   type BusinessEmail, type InsertBusinessEmail,
   type BusinessContact, type InsertBusinessContact,
   type BusinessMetric, type InsertBusinessMetric,
+  type Workspace, type InsertWorkspace,
+  type BusinessLead, type InsertBusinessLead,
+  type EmailQueueItem, type InsertEmailQueueItem,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, and, isNull, or } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+
+  getAllWorkspaces(): Promise<Workspace[]>;
+  getWorkspace(id: number): Promise<Workspace | undefined>;
+  createWorkspace(workspace: InsertWorkspace): Promise<Workspace>;
+  updateWorkspace(id: number, data: Partial<InsertWorkspace>): Promise<Workspace | undefined>;
+  deleteWorkspace(id: number): Promise<void>;
 
   getAllModels(): Promise<AiModel[]>;
   getModel(id: number): Promise<AiModel | undefined>;
@@ -35,7 +45,7 @@ export interface IStorage {
   deleteApiKey(id: number): Promise<void>;
   toggleApiKey(id: number, isActive: boolean): Promise<void>;
 
-  getRecentLogs(limit?: number): Promise<ActivityLog[]>;
+  getRecentLogs(limit?: number, workspaceId?: number): Promise<ActivityLog[]>;
   createLog(log: InsertActivityLog): Promise<ActivityLog>;
 
   getSetting(key: string): Promise<Setting | undefined>;
@@ -50,6 +60,32 @@ export interface IStorage {
   createGithubRepo(repo: InsertGithubRepo): Promise<GitHubRepo>;
   updateGithubRepo(id: number, data: Partial<InsertGithubRepo>): Promise<GitHubRepo | undefined>;
   deleteGithubRepo(id: number): Promise<void>;
+
+  getBusinessEmails(limit?: number, workspaceId?: number): Promise<BusinessEmail[]>;
+  createBusinessEmail(email: InsertBusinessEmail): Promise<BusinessEmail>;
+  getBusinessEmailStats(workspaceId?: number): Promise<{ sent: number; received: number; replied: number; total: number }>;
+
+  getBusinessContacts(limit?: number, workspaceId?: number): Promise<BusinessContact[]>;
+  createBusinessContact(contact: InsertBusinessContact): Promise<BusinessContact>;
+
+  getBusinessMetrics(workspaceId?: number): Promise<BusinessMetric[]>;
+  upsertBusinessMetric(type: string, key: string, value: string, period?: string, workspaceId?: number): Promise<BusinessMetric>;
+
+  getBusinessLeads(workspaceId?: number, limit?: number): Promise<BusinessLead[]>;
+  getBusinessLead(id: number): Promise<BusinessLead | undefined>;
+  createBusinessLead(lead: InsertBusinessLead): Promise<BusinessLead>;
+  updateBusinessLead(id: number, data: Partial<InsertBusinessLead>): Promise<BusinessLead | undefined>;
+  deleteBusinessLead(id: number): Promise<void>;
+
+  getEmailQueue(workspaceId?: number, status?: string): Promise<EmailQueueItem[]>;
+  createEmailQueueItem(item: InsertEmailQueueItem): Promise<EmailQueueItem>;
+  updateEmailQueueItem(id: number, data: Partial<InsertEmailQueueItem>): Promise<EmailQueueItem | undefined>;
+  getNextPendingEmail(): Promise<EmailQueueItem | undefined>;
+}
+
+function wsFilter(workspaceId?: number) {
+  if (workspaceId) return eq(businessEmails.workspaceId, workspaceId);
+  return undefined;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -66,6 +102,29 @@ export class DatabaseStorage implements IStorage {
   async createUser(insertUser: InsertUser): Promise<User> {
     const [user] = await db.insert(users).values(insertUser).returning();
     return user;
+  }
+
+  async getAllWorkspaces(): Promise<Workspace[]> {
+    return db.select().from(workspaces).orderBy(workspaces.createdAt);
+  }
+
+  async getWorkspace(id: number): Promise<Workspace | undefined> {
+    const [ws] = await db.select().from(workspaces).where(eq(workspaces.id, id));
+    return ws || undefined;
+  }
+
+  async createWorkspace(workspace: InsertWorkspace): Promise<Workspace> {
+    const [created] = await db.insert(workspaces).values(workspace).returning();
+    return created;
+  }
+
+  async updateWorkspace(id: number, data: Partial<InsertWorkspace>): Promise<Workspace | undefined> {
+    const [updated] = await db.update(workspaces).set(data).where(eq(workspaces.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async deleteWorkspace(id: number): Promise<void> {
+    await db.delete(workspaces).where(eq(workspaces.id, id));
   }
 
   async getAllModels(): Promise<AiModel[]> {
@@ -122,7 +181,12 @@ export class DatabaseStorage implements IStorage {
     await db.update(apiKeys).set({ isActive }).where(eq(apiKeys.id, id));
   }
 
-  async getRecentLogs(limit = 50): Promise<ActivityLog[]> {
+  async getRecentLogs(limit = 50, workspaceId?: number): Promise<ActivityLog[]> {
+    if (workspaceId) {
+      return db.select().from(activityLogs)
+        .where(or(eq(activityLogs.workspaceId, workspaceId), isNull(activityLogs.workspaceId)))
+        .orderBy(desc(activityLogs.createdAt)).limit(limit);
+    }
     return db.select().from(activityLogs).orderBy(desc(activityLogs.createdAt)).limit(limit);
   }
 
@@ -186,7 +250,12 @@ export class DatabaseStorage implements IStorage {
     await db.delete(githubRepos).where(eq(githubRepos.id, id));
   }
 
-  async getBusinessEmails(limit = 50): Promise<BusinessEmail[]> {
+  async getBusinessEmails(limit = 50, workspaceId?: number): Promise<BusinessEmail[]> {
+    if (workspaceId) {
+      return db.select().from(businessEmails)
+        .where(eq(businessEmails.workspaceId, workspaceId))
+        .orderBy(desc(businessEmails.createdAt)).limit(limit);
+    }
     return db.select().from(businessEmails).orderBy(desc(businessEmails.createdAt)).limit(limit);
   }
 
@@ -195,7 +264,18 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
-  async getBusinessEmailStats() {
+  async getBusinessEmailStats(workspaceId?: number) {
+    if (workspaceId) {
+      const sent = await db.select({ count: sql<number>`count(*)` }).from(businessEmails).where(and(eq(businessEmails.direction, "sent"), eq(businessEmails.workspaceId, workspaceId)));
+      const received = await db.select({ count: sql<number>`count(*)` }).from(businessEmails).where(and(eq(businessEmails.direction, "received"), eq(businessEmails.workspaceId, workspaceId)));
+      const replied = await db.select({ count: sql<number>`count(*)` }).from(businessEmails).where(and(eq(businessEmails.status, "replied"), eq(businessEmails.workspaceId, workspaceId)));
+      return {
+        sent: Number(sent[0]?.count || 0),
+        received: Number(received[0]?.count || 0),
+        replied: Number(replied[0]?.count || 0),
+        total: Number(sent[0]?.count || 0) + Number(received[0]?.count || 0),
+      };
+    }
     const sent = await db.select({ count: sql<number>`count(*)` }).from(businessEmails).where(eq(businessEmails.direction, "sent"));
     const received = await db.select({ count: sql<number>`count(*)` }).from(businessEmails).where(eq(businessEmails.direction, "received"));
     const replied = await db.select({ count: sql<number>`count(*)` }).from(businessEmails).where(eq(businessEmails.status, "replied"));
@@ -207,7 +287,12 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async getBusinessContacts(limit = 50): Promise<BusinessContact[]> {
+  async getBusinessContacts(limit = 50, workspaceId?: number): Promise<BusinessContact[]> {
+    if (workspaceId) {
+      return db.select().from(businessContacts)
+        .where(eq(businessContacts.workspaceId, workspaceId))
+        .orderBy(desc(businessContacts.lastContact)).limit(limit);
+    }
     return db.select().from(businessContacts).orderBy(desc(businessContacts.lastContact)).limit(limit);
   }
 
@@ -216,15 +301,76 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
-  async getBusinessMetrics(): Promise<BusinessMetric[]> {
+  async getBusinessMetrics(workspaceId?: number): Promise<BusinessMetric[]> {
+    if (workspaceId) {
+      return db.select().from(businessMetrics)
+        .where(eq(businessMetrics.workspaceId, workspaceId))
+        .orderBy(desc(businessMetrics.createdAt));
+    }
     return db.select().from(businessMetrics).orderBy(desc(businessMetrics.createdAt));
   }
 
-  async upsertBusinessMetric(type: string, key: string, value: string, period?: string): Promise<BusinessMetric> {
+  async upsertBusinessMetric(type: string, key: string, value: string, period?: string, workspaceId?: number): Promise<BusinessMetric> {
     const [created] = await db.insert(businessMetrics).values({
-      metricType: type, metricKey: key, metricValue: value, period,
+      metricType: type, metricKey: key, metricValue: value, period, workspaceId,
     }).returning();
     return created;
+  }
+
+  async getBusinessLeads(workspaceId?: number, limit = 100): Promise<BusinessLead[]> {
+    if (workspaceId) {
+      return db.select().from(businessLeads)
+        .where(eq(businessLeads.workspaceId, workspaceId))
+        .orderBy(desc(businessLeads.createdAt)).limit(limit);
+    }
+    return db.select().from(businessLeads).orderBy(desc(businessLeads.createdAt)).limit(limit);
+  }
+
+  async getBusinessLead(id: number): Promise<BusinessLead | undefined> {
+    const [lead] = await db.select().from(businessLeads).where(eq(businessLeads.id, id));
+    return lead || undefined;
+  }
+
+  async createBusinessLead(lead: InsertBusinessLead): Promise<BusinessLead> {
+    const [created] = await db.insert(businessLeads).values(lead).returning();
+    return created;
+  }
+
+  async updateBusinessLead(id: number, data: Partial<InsertBusinessLead>): Promise<BusinessLead | undefined> {
+    const [updated] = await db.update(businessLeads).set(data).where(eq(businessLeads.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async deleteBusinessLead(id: number): Promise<void> {
+    await db.delete(businessLeads).where(eq(businessLeads.id, id));
+  }
+
+  async getEmailQueue(workspaceId?: number, status?: string): Promise<EmailQueueItem[]> {
+    const conditions = [];
+    if (workspaceId) conditions.push(eq(emailQueue.workspaceId, workspaceId));
+    if (status) conditions.push(eq(emailQueue.status, status));
+    if (conditions.length > 0) {
+      return db.select().from(emailQueue).where(and(...conditions)).orderBy(emailQueue.scheduledAt);
+    }
+    return db.select().from(emailQueue).orderBy(emailQueue.scheduledAt);
+  }
+
+  async createEmailQueueItem(item: InsertEmailQueueItem): Promise<EmailQueueItem> {
+    const [created] = await db.insert(emailQueue).values(item).returning();
+    return created;
+  }
+
+  async updateEmailQueueItem(id: number, data: Partial<InsertEmailQueueItem>): Promise<EmailQueueItem | undefined> {
+    const [updated] = await db.update(emailQueue).set(data).where(eq(emailQueue.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async getNextPendingEmail(): Promise<EmailQueueItem | undefined> {
+    const [item] = await db.select().from(emailQueue)
+      .where(eq(emailQueue.status, "pending"))
+      .orderBy(emailQueue.scheduledAt)
+      .limit(1);
+    return item || undefined;
   }
 }
 
