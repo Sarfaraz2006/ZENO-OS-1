@@ -44,10 +44,10 @@ export default function LoginPage() {
             <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-primary animate-pulse" />
           </div>
           <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text" data-testid="text-app-title">
-            J.A.R.V.I.S
+            ZENO OS
           </h1>
           <p className="text-muted-foreground text-sm mt-2 tracking-widest uppercase">
-            AI Assistant Platform
+            Business AI Operating System
           </p>
         </div>
 

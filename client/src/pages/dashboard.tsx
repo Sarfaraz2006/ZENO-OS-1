@@ -1,8 +1,10 @@
+import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useLocation } from "wouter";
 import {
   AreaChart,
@@ -38,6 +40,9 @@ import {
   Activity,
   Users,
   Layers,
+  Radio,
+  Search,
+  Clock,
 } from "lucide-react";
 
 const USAGE_DATA = [
@@ -133,13 +138,36 @@ export default function DashboardPage() {
 
   const capabilities = [
     { title: "Multi-Model AI", desc: "500+ models via OpenRouter", icon: Sparkles, status: "live" },
-    { title: "Voice Agent", desc: "Continuous conversation mode", icon: Mic, status: "live" },
+    { title: "Intelligence Router", desc: "Auto-selects best model per task", icon: Cpu, status: "live" },
     { title: "Code Generation", desc: "Lovable-style live preview", icon: Code2, status: "live" },
-    { title: "REST API", desc: "External access with keys", icon: Globe, status: "live" },
-    { title: "GitHub Integration", desc: "Deploy & edit repos", icon: GitBranch, status: "live" },
-    { title: "Email System", desc: "SMTP send & receive", icon: Mail, status: "live" },
-    { title: "Business Board", desc: "Email, WhatsApp, Payments", icon: BarChart3, status: "live" },
+    { title: "Lead Scouting", desc: "DuckDuckGo auto-scraper", icon: Search, status: "live" },
+    { title: "Email Queue", desc: "Smart delays, bulk outreach", icon: Mail, status: "live" },
+    { title: "Workspace Isolation", desc: "Multi-business support", icon: Layers, status: "live" },
+    { title: "Voice Agent", desc: "Commands + continuous mode", icon: Mic, status: "live" },
   ];
+
+  interface ActivityLog {
+    id: number;
+    action: string;
+    details: string | null;
+    source: string | null;
+    createdAt: string;
+  }
+
+  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
+  const eventSourceRef = useRef<EventSource | null>(null);
+
+  useEffect(() => {
+    const es = new EventSource("/api/activity/stream", { withCredentials: true });
+    es.onmessage = (event) => {
+      try {
+        const logs = JSON.parse(event.data);
+        setActivityLogs(logs);
+      } catch {}
+    };
+    eventSourceRef.current = es;
+    return () => es.close();
+  }, []);
 
   const CustomTooltipArea = ({ active, payload, label }: any) => {
     if (active && payload?.length) {
@@ -170,17 +198,17 @@ export default function DashboardPage() {
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight" data-testid="text-dashboard-title">
-            Dashboard
+            ZENO OS
           </h1>
           <p className="text-muted-foreground text-sm mt-1 flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            All systems operational
+            All systems autonomous
           </p>
         </div>
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="gap-1.5 h-7">
             <Zap className="w-3 h-3 text-primary" />
-            J.A.R.V.I.S
+            ZENO OS
           </Badge>
           <Button size="sm" className="gap-2 h-7 text-xs" onClick={() => setLocation("/chat")} data-testid="button-start-chat">
             <MessageSquare className="w-3 h-3" />
@@ -368,23 +396,71 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      <Card className="overflow-hidden">
-        <CardContent className="p-0">
-          <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent p-5 flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center">
-                <Zap className="w-5 h-5 text-primary" />
+      <Card>
+        <CardContent className="p-4 md:p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-emerald-500/15 flex items-center justify-center">
+                <Radio className="w-3.5 h-3.5 text-emerald-500 animate-pulse" />
               </div>
               <div>
-                <h3 className="font-semibold text-sm">Ready to build something?</h3>
-                <p className="text-xs text-muted-foreground">Ask JARVIS to generate websites, code, or analyze data</p>
+                <h3 className="font-semibold text-sm">Live Activity Feed</h3>
+                <p className="text-[11px] text-muted-foreground">Real-time autonomous actions</p>
               </div>
             </div>
-            <Button className="gap-2 text-xs" size="sm" onClick={() => setLocation("/chat")} data-testid="button-cta-chat">
-              Start Building
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Button>
+            <Badge variant="outline" className="text-[10px] h-5 gap-1 text-emerald-500 border-emerald-500/30">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Live
+            </Badge>
           </div>
+          {activityLogs.length === 0 ? (
+            <div className="text-center py-6">
+              <Activity className="w-6 h-6 text-muted-foreground/30 mx-auto mb-2" />
+              <p className="text-xs text-muted-foreground">No activity yet. Start using ZENO OS to see live actions here.</p>
+            </div>
+          ) : (
+            <ScrollArea className="h-[200px]">
+              <div className="space-y-1">
+                {activityLogs.map((log) => {
+                  const isZeno = log.action.includes("[ZENO]");
+                  const sourceColors: Record<string, string> = {
+                    scraper: "text-cyan-500 bg-cyan-500/10",
+                    email_queue: "text-blue-500 bg-blue-500/10",
+                    stripe: "text-amber-500 bg-amber-500/10",
+                    workspace: "text-violet-500 bg-violet-500/10",
+                    auth: "text-rose-500 bg-rose-500/10",
+                  };
+                  const colorClass = sourceColors[log.source || ""] || "text-muted-foreground bg-muted/50";
+                  return (
+                    <div
+                      key={log.id}
+                      className={`flex items-start gap-2.5 px-3 py-2 rounded-lg transition-colors ${isZeno ? "bg-primary/5 border border-primary/10" : "hover:bg-muted/30"}`}
+                      data-testid={`activity-log-${log.id}`}
+                    >
+                      <div className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 mt-0.5 ${colorClass}`}>
+                        <Zap className="w-3 h-3" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium truncate">{log.action}</p>
+                        {log.details && (
+                          <p className="text-[10px] text-muted-foreground truncate mt-0.5">{log.details}</p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {log.source && (
+                          <Badge variant="outline" className="text-[9px] h-4 px-1.5">{log.source}</Badge>
+                        )}
+                        <span className="text-[10px] text-muted-foreground font-mono flex items-center gap-0.5">
+                          <Clock className="w-2.5 h-2.5" />
+                          {new Date(log.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </ScrollArea>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -98,7 +98,7 @@ export default function GitHubPage() {
         owner: user.login,
         repo: deployRepo.name,
         htmlContent: deployHtml,
-        commitMessage: "Deploy via JARVIS",
+        commitMessage: "Deploy via ZENO OS",
       });
       return res.json();
     },
@@ -198,7 +198,7 @@ export default function GitHubPage() {
                 <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Description</label>
                 <Input
                   data-testid="input-new-repo-desc"
-                  placeholder="A cool website built with JARVIS"
+                  placeholder="A cool website built with ZENO OS"
                   value={newRepoDesc}
                   onChange={(e) => setNewRepoDesc(e.target.value)}
                 />

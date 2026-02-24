@@ -234,7 +234,7 @@ export default function CodeEditorPage() {
         path: file.path,
         content: file.content,
         sha: file.sha,
-        message: `Update ${file.path} via JARVIS`,
+        message: `Update ${file.path} via ZENO OS`,
         branch: selectedRepo.default_branch,
       });
       return res.json();
@@ -258,7 +258,7 @@ export default function CodeEditorPage() {
       const res = await apiRequest("PUT", `/api/github/repos/${user.login}/${selectedRepo.name}/file`, {
         path,
         content,
-        message: `Create ${path} via JARVIS`,
+        message: `Create ${path} via ZENO OS`,
         branch: selectedRepo.default_branch,
       });
       return res.json();
@@ -291,7 +291,7 @@ export default function CodeEditorPage() {
       const res = await apiRequest("DELETE", `/api/github/repos/${user.login}/${selectedRepo.name}/file`, {
         path: file.path,
         sha: file.sha,
-        message: `Delete ${file.path} via JARVIS`,
+        message: `Delete ${file.path} via ZENO OS`,
         branch: selectedRepo.default_branch,
       });
       return res.json();

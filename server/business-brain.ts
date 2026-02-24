@@ -59,7 +59,7 @@ async function gatherBusinessContext(): Promise<string> {
   const replyRate = emailStats.received > 0 ? Math.round((emailStats.replied / emailStats.received) * 100) : 0;
 
   return `
-=== JARVIS BUSINESS INTELLIGENCE CONTEXT ===
+=== ZENO OS BUSINESS INTELLIGENCE CONTEXT ===
 Generated: ${new Date().toISOString()}
 
 ## Integration Status
@@ -296,7 +296,7 @@ export async function analyzeBusinessWithAI(question?: string): Promise<BrainAna
 
   try {
     const prompt = question
-      ? `You are JARVIS Business Brain - an AI business intelligence analyst. Given the following business data, answer this specific question: "${question}"
+      ? `You are ZENO Business Brain - an AI business intelligence analyst. Given the following business data, answer this specific question: "${question}"
 
 ${context}
 
@@ -316,7 +316,7 @@ Respond with a JSON object with these fields:
 }
 
 Be specific, actionable, and data-driven. Reference actual numbers from the data.`
-      : `You are JARVIS Business Brain - an AI business intelligence analyst. Analyze this business data and generate strategic insights:
+      : `You are ZENO Business Brain - an AI business intelligence analyst. Analyze this business data and generate strategic insights:
 
 ${context}
 

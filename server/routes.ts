@@ -19,7 +19,7 @@ export async function registerRoutes(
 ): Promise<Server> {
   app.use(
     session({
-      secret: process.env.SESSION_SECRET || "jarvis-secret-key",
+      secret: process.env.SESSION_SECRET || "zeno-os-secret-key",
       resave: false,
       saveUninitialized: false,
       cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 },
@@ -216,7 +216,7 @@ export async function registerRoutes(
   registerChatRoutes(app);
 
   app.get("/api/v1/chat", requireApiKey, async (req, res) => {
-    res.json({ message: "Jarvis API v1 - Use POST to chat" });
+    res.json({ message: "ZENO OS API v1 - Use POST to chat" });
   });
 
   app.post("/api/terminal/execute", requireAuth, async (req, res) => {

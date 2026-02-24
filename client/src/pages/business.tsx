@@ -57,6 +57,7 @@ import {
   Heart,
   MessageSquare,
   Zap,
+  Trash2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -123,9 +124,35 @@ const CHANNEL_DATA = [
   { name: "API", value: 5, color: "#f59e0b" },
 ];
 
+interface BusinessLead {
+  id: number;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  company: string | null;
+  website: string | null;
+  status: string;
+  source: string | null;
+  score: number | null;
+  notes: string | null;
+  createdAt: string;
+}
+
+interface EmailQueueItem {
+  id: number;
+  toAddr: string;
+  subject: string;
+  body: string;
+  status: string;
+  scheduledAt: string | null;
+  sentAt: string | null;
+  error: string | null;
+  createdAt: string;
+}
+
 export default function BusinessPage() {
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<"overview" | "emails" | "contacts" | "brain">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "emails" | "contacts" | "brain" | "leads" | "queue">("overview");
   const [replyDialog, setReplyDialog] = useState<BusinessEmail | null>(null);
   const [replyBody, setReplyBody] = useState("");
   const [composeDialog, setComposeDialog] = useState(false);
@@ -138,6 +165,12 @@ export default function BusinessPage() {
   const [contactPhone, setContactPhone] = useState("");
   const [brainQuestion, setBrainQuestion] = useState("");
   const [brainAnswer, setBrainAnswer] = useState<BrainAnalysis | null>(null);
+  const [scrapeQuery, setScrapeQuery] = useState("");
+  const [addLeadDialog, setAddLeadDialog] = useState(false);
+  const [newLeadName, setNewLeadName] = useState("");
+  const [newLeadEmail, setNewLeadEmail] = useState("");
+  const [newLeadPhone, setNewLeadPhone] = useState("");
+  const [newLeadCompany, setNewLeadCompany] = useState("");
 
   const { data: integrationStatus } = useQuery<{ email: { connected: boolean }; whatsapp: { connected: boolean }; stripe: { connected: boolean }; n8n: { connected: boolean } }>({
     queryKey: ["/api/integrations/status"],
@@ -262,6 +295,61 @@ export default function BusinessPage() {
     },
   });
 
+  const { data: leads = [], isLoading: leadsLoading } = useQuery<BusinessLead[]>({
+    queryKey: ["/api/leads"],
+    enabled: activeTab === "leads",
+  });
+
+  const { data: emailQueue = [] } = useQuery<EmailQueueItem[]>({
+    queryKey: ["/api/email-queue"],
+    enabled: activeTab === "queue",
+  });
+
+  const scrapeLeads = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/leads/scrape", { query: scrapeQuery });
+      return res.json();
+    },
+    onSuccess: (data: { leadsFound: number; message: string }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
+      toast({ title: "Scouting Complete", description: data.message });
+      setScrapeQuery("");
+    },
+    onError: (error: Error) => {
+      toast({ title: "Scouting failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const addLead = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/leads", {
+        name: newLeadName, email: newLeadEmail || null,
+        phone: newLeadPhone || null, company: newLeadCompany || null,
+        status: "new", source: "manual",
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
+      setAddLeadDialog(false);
+      setNewLeadName(""); setNewLeadEmail(""); setNewLeadPhone(""); setNewLeadCompany("");
+      toast({ title: "Lead added" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteLead = useMutation({
+    mutationFn: async (id: number) => {
+      await apiRequest("DELETE", `/api/leads/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
+      toast({ title: "Lead removed" });
+    },
+  });
+
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload?.length) {
       return (
@@ -317,7 +405,9 @@ export default function BusinessPage() {
 
   const tabs = [
     { id: "overview" as const, label: "Overview" },
+    { id: "leads" as const, label: "Leads" },
     { id: "emails" as const, label: "Emails" },
+    { id: "queue" as const, label: "Email Queue" },
     { id: "contacts" as const, label: "Contacts" },
     { id: "brain" as const, label: "Business Brain" },
   ];
@@ -877,6 +967,187 @@ export default function BusinessPage() {
           </Card>
         </div>
       )}
+
+      {activeTab === "leads" && (
+        <div className="space-y-4">
+          <Card>
+            <CardContent className="p-4 md:p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Target className="w-4 h-4 text-cyan-500" />
+                  <h3 className="font-semibold text-sm">Lead Scouting</h3>
+                </div>
+                <Button size="sm" variant="outline" className="gap-2 text-xs h-8" onClick={() => setAddLeadDialog(true)} data-testid="button-add-lead">
+                  <Plus className="w-3 h-3" />
+                  Add Lead
+                </Button>
+              </div>
+              <div className="flex gap-2 mb-4">
+                <Input
+                  data-testid="input-scrape-query"
+                  placeholder="e.g., restaurants in Delhi, real estate agents Mumbai..."
+                  value={scrapeQuery}
+                  onChange={(e) => setScrapeQuery(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && scrapeQuery.trim()) scrapeLeads.mutate(); }}
+                  className="h-9 text-sm flex-1"
+                />
+                <Button
+                  data-testid="button-scrape-leads"
+                  size="sm"
+                  className="gap-2 text-xs h-9 px-4"
+                  disabled={!scrapeQuery.trim() || scrapeLeads.isPending}
+                  onClick={() => scrapeLeads.mutate()}
+                >
+                  {scrapeLeads.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Target className="w-3 h-3" />}
+                  {scrapeLeads.isPending ? "Scouting..." : "Scout Leads"}
+                </Button>
+              </div>
+              {leadsLoading ? (
+                <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full" />)}</div>
+              ) : leads.length === 0 ? (
+                <div className="text-center py-12">
+                  <Target className="w-10 h-10 text-muted-foreground/20 mx-auto mb-3" />
+                  <p className="text-sm font-medium text-muted-foreground">No leads yet</p>
+                  <p className="text-xs text-muted-foreground mt-1">Use the scout above to find leads, or add them manually</p>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {leads.map((lead) => {
+                    const statusColors: Record<string, string> = {
+                      new: "text-blue-500 border-blue-500/30",
+                      contacted: "text-amber-500 border-amber-500/30",
+                      qualified: "text-emerald-500 border-emerald-500/30",
+                      client: "text-violet-500 border-violet-500/30",
+                      lost: "text-red-500 border-red-500/30",
+                    };
+                    return (
+                      <div key={lead.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/30 transition-colors group" data-testid={`lead-item-${lead.id}`}>
+                        <div className="w-8 h-8 rounded-full bg-cyan-500/10 flex items-center justify-center shrink-0">
+                          <Users className="w-3.5 h-3.5 text-cyan-500" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs font-medium truncate">{lead.name}</p>
+                            <Badge variant="outline" className={`text-[9px] h-4 px-1.5 ${statusColors[lead.status] || ""}`}>
+                              {lead.status}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-3 mt-0.5">
+                            {lead.email && <span className="text-[10px] text-muted-foreground truncate">{lead.email}</span>}
+                            {lead.company && <span className="text-[10px] text-muted-foreground truncate">{lead.company}</span>}
+                            {lead.website && (
+                              <a href={lead.website} target="_blank" rel="noopener noreferrer" className="text-[10px] text-primary truncate hover:underline" onClick={(e) => e.stopPropagation()}>
+                                {lead.website.replace(/https?:\/\/(www\.)?/, "").slice(0, 30)}
+                              </a>
+                            )}
+                          </div>
+                          {lead.notes && <p className="text-[10px] text-muted-foreground truncate mt-0.5">{lead.notes}</p>}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Badge variant="outline" className="text-[9px] h-4 px-1.5">{lead.source}</Badge>
+                          <button
+                            className="invisible group-hover:visible p-1 rounded hover:bg-destructive/10"
+                            onClick={() => deleteLead.mutate(lead.id)}
+                            data-testid={`button-delete-lead-${lead.id}`}
+                          >
+                            <Trash2 className="w-3 h-3 text-destructive" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {activeTab === "queue" && (
+        <Card>
+          <CardContent className="p-4 md:p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-blue-500" />
+                <div>
+                  <h3 className="font-semibold text-sm">Email Queue</h3>
+                  <p className="text-[11px] text-muted-foreground">Smart delays for human-like sending</p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Badge variant="outline" className="text-[10px] h-5 gap-1">
+                  {emailQueue.filter(q => q.status === "pending").length} pending
+                </Badge>
+                <Badge variant="outline" className="text-[10px] h-5 gap-1 text-emerald-500 border-emerald-500/30">
+                  {emailQueue.filter(q => q.status === "sent").length} sent
+                </Badge>
+              </div>
+            </div>
+            {emailQueue.length === 0 ? (
+              <div className="text-center py-12">
+                <Mail className="w-10 h-10 text-muted-foreground/20 mx-auto mb-3" />
+                <p className="text-sm font-medium text-muted-foreground">Email queue is empty</p>
+                <p className="text-xs text-muted-foreground mt-1">Queue emails from the Leads tab for automated sending</p>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {emailQueue.map((item) => {
+                  const statusColors: Record<string, string> = {
+                    pending: "text-amber-500 bg-amber-500/10",
+                    sending: "text-blue-500 bg-blue-500/10",
+                    sent: "text-emerald-500 bg-emerald-500/10",
+                    failed: "text-red-500 bg-red-500/10",
+                  };
+                  return (
+                    <div key={item.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/30 transition-colors" data-testid={`queue-item-${item.id}`}>
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${statusColors[item.status] || "bg-muted/50"}`}>
+                        {item.status === "sent" ? <CheckCircle2 className="w-3 h-3" /> : item.status === "failed" ? <AlertCircle className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium truncate">{item.subject}</p>
+                        <p className="text-[10px] text-muted-foreground truncate">To: {item.toAddr}</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Badge variant="outline" className={`text-[9px] h-4 px-1.5 ${statusColors[item.status] || ""}`}>
+                          {item.status}
+                        </Badge>
+                        {item.sentAt && (
+                          <span className="text-[10px] text-muted-foreground font-mono">
+                            {new Date(item.sentAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        )}
+                        {item.error && <span className="text-[10px] text-red-500 truncate max-w-[100px]">{item.error}</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      <Dialog open={addLeadDialog} onOpenChange={setAddLeadDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-sm">
+              <Users className="w-4 h-4 text-primary" />
+              Add Lead
+            </DialogTitle>
+            <DialogDescription className="text-xs">Add a new business lead manually.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 mt-2">
+            <Input data-testid="input-lead-name" placeholder="Name" value={newLeadName} onChange={(e) => setNewLeadName(e.target.value)} className="h-9 text-sm" />
+            <Input data-testid="input-lead-email" placeholder="Email (optional)" value={newLeadEmail} onChange={(e) => setNewLeadEmail(e.target.value)} className="h-9 text-sm" />
+            <Input data-testid="input-lead-phone" placeholder="Phone (optional)" value={newLeadPhone} onChange={(e) => setNewLeadPhone(e.target.value)} className="h-9 text-sm" />
+            <Input data-testid="input-lead-company" placeholder="Company (optional)" value={newLeadCompany} onChange={(e) => setNewLeadCompany(e.target.value)} className="h-9 text-sm" />
+            <Button data-testid="button-submit-lead" className="w-full gap-2 text-xs" disabled={!newLeadName || addLead.isPending} onClick={() => addLead.mutate()}>
+              {addLead.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+              Add Lead
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={composeDialog} onOpenChange={setComposeDialog}>
         <DialogContent className="max-w-md">

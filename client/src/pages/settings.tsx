@@ -450,7 +450,7 @@ export default function SettingsPage() {
                 <label className="text-[11px] text-muted-foreground">From Email</label>
                 <Input
                   data-testid="input-smtp-from"
-                  placeholder="jarvis@yourdomain.com"
+                  placeholder="zeno@yourdomain.com"
                   value={smtpFrom}
                   onChange={(e) => setSmtpFrom(e.target.value)}
                   className="h-8 text-xs"
@@ -621,7 +621,7 @@ function IntegrationsSection() {
           </div>
           <div>
             <h2 className="font-semibold text-sm">Integrations</h2>
-            <p className="text-xs text-muted-foreground">Connect external services to your JARVIS</p>
+            <p className="text-xs text-muted-foreground">Connect external services to ZENO OS</p>
           </div>
         </div>
         <div className="space-y-2">

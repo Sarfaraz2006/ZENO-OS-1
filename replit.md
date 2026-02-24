@@ -1,7 +1,7 @@
-# J.A.R.V.I.S - AI Assistant Platform
+# ZENO OS - Multi-Business AI Operating System
 
 ## Overview
-A comprehensive Jarvis-like AI assistant platform with Lovable-style code generation. Built as a web-based PWA with voice interaction, multi-model AI support (OpenRouter), live code preview with split-view, real terminal, GitHub integration with Pages deployment, email system, Business Board, and complete REST API.
+A comprehensive AI business operating system (formerly JARVIS) with Lovable-style code generation. Built as a web-based PWA with workspace isolation, intelligence model routing, autonomous lead scouting, smart email queue, voice interaction, multi-model AI support (OpenRouter), live code preview with split-view, real terminal, GitHub integration with Pages deployment, email system, Business Board, and complete REST API.
 
 ## Architecture
 - **Frontend**: React + TypeScript + Tailwind CSS + Shadcn UI

@@ -59,7 +59,7 @@ interface Conversation {
   messages?: Message[];
 }
 
-const DEFAULT_SYSTEM_PROMPT = `You are J.A.R.V.I.S, an elite AI web developer assistant. You build stunning, production-grade websites.
+const DEFAULT_SYSTEM_PROMPT = `You are ZENO, an elite AI business operating system. You build stunning, production-grade websites and handle business automation.
 
 CRITICAL RULES FOR CODE GENERATION:
 When asked to build/create/design ANY website, page, component, or UI:
@@ -325,7 +325,7 @@ export default function ChatPage() {
   const exportConversation = () => {
     if (!activeChat?.messages) return;
     const text = activeChat.messages.map((m) =>
-      `## ${m.role === "user" ? "You" : "Jarvis"}\n${m.content}\n`
+      `## ${m.role === "user" ? "You" : "Zeno"}\n${m.content}\n`
     ).join("\n---\n\n");
     const blob = new Blob([`# ${activeChat.title}\n\n${text}`], { type: "text/markdown" });
     const url = URL.createObjectURL(blob);
@@ -559,7 +559,7 @@ export default function ChatPage() {
                 <div className="text-center max-w-md">
                   <h2 className="text-xl font-semibold mb-2" data-testid="text-chat-welcome">What shall I build for you?</h2>
                   <p className="text-sm text-muted-foreground leading-relaxed">
-                    Ask me to create any website, UI or code. I'll generate it and show you a live preview.
+                    Ask me to create any website, UI or code. ZENO will generate it and show you a live preview.
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2 justify-center max-w-lg">
@@ -607,7 +607,7 @@ export default function ChatPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-xs font-medium">
-                          {msg.role === "user" ? "You" : "Jarvis"}
+                          {msg.role === "user" ? "You" : "Zeno"}
                         </span>
                         <span className="text-[10px] text-muted-foreground font-mono">
                           {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
@@ -648,7 +648,7 @@ export default function ChatPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-medium">Jarvis</span>
+                        <span className="text-xs font-medium">Zeno</span>
                         <Badge variant="outline" className="text-[10px] gap-1 h-4 px-1.5 animate-pulse">
                           <Loader2 className="w-2.5 h-2.5 animate-spin" />
                           Generating

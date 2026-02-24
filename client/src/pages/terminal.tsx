@@ -26,7 +26,7 @@ export default function TerminalPage() {
     {
       id: 0,
       type: "system",
-      content: "J.A.R.V.I.S Terminal v1.0 — Real system terminal\nExecute any command: ls, pwd, cat, node, npm, python3, git, curl, etc.\nType 'help' for more info. Type 'clear' to clear screen.",
+      content: "ZENO OS Terminal v2.0 — Real system terminal\nExecute any command: ls, pwd, cat, node, npm, python3, git, curl, etc.\nType 'help' for more info. Type 'clear' to clear screen.",
       timestamp: new Date(),
     },
   ]);
@@ -110,12 +110,12 @@ Blocked (security): rm, rmdir, kill, shutdown, sudo, su, chmod, chown`
     }
 
     if (trimmed === "whoami") {
-      addEntry("output", "admin@jarvis-platform");
+      addEntry("output", "admin@zeno-os");
       return true;
     }
 
     if (trimmed === "version") {
-      addEntry("output", "J.A.R.V.I.S Platform v1.0.0\nRuntime: Node.js + React + TypeScript\nBackend: Express.js + PostgreSQL\nAI: OpenRouter Multi-Model\nTerminal: Real Linux shell");
+      addEntry("output", "ZENO OS v2.0.0\nRuntime: Node.js + React + TypeScript\nBackend: Express.js + PostgreSQL\nAI: OpenRouter Multi-Model + Intelligence Router\nTerminal: Real Linux shell");
       return true;
     }
 

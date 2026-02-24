@@ -29,14 +29,14 @@ const ACCENT_COLORS: Record<ThemeAccent, { primary: string; primaryDark: string;
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<ThemeMode>(() => {
     if (typeof window !== "undefined") {
-      return (localStorage.getItem("jarvis-theme") as ThemeMode) || "dark";
+      return (localStorage.getItem("zeno-theme") as ThemeMode) || "dark";
     }
     return "dark";
   });
 
   const [accent, setAccentState] = useState<ThemeAccent>(() => {
     if (typeof window !== "undefined") {
-      return (localStorage.getItem("jarvis-accent") as ThemeAccent) || "blue";
+      return (localStorage.getItem("zeno-accent") as ThemeAccent) || "blue";
     }
     return "blue";
   });
@@ -45,7 +45,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const root = document.documentElement;
     root.classList.remove("light", "dark");
     root.classList.add(theme);
-    localStorage.setItem("jarvis-theme", theme);
+    localStorage.setItem("zeno-theme", theme);
   }, [theme]);
 
   useEffect(() => {
@@ -62,7 +62,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       root.style.setProperty("--sidebar-primary", colors.ring);
       root.style.setProperty("--sidebar-ring", colors.ring);
     }
-    localStorage.setItem("jarvis-accent", accent);
+    localStorage.setItem("zeno-accent", accent);
   }, [accent, theme]);
 
   const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
