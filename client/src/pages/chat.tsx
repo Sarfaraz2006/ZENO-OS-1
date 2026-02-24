@@ -254,6 +254,11 @@ export default function ChatPage() {
         credentials: "include",
       });
 
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: "Failed to send message" }));
+        throw new Error(err.error || "Failed to send message");
+      }
+
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       let fullResponse = "";
@@ -267,6 +272,9 @@ export default function ChatPage() {
             if (line.startsWith("data: ")) {
               try {
                 const data = JSON.parse(line.slice(6));
+                if (data.error) {
+                  throw new Error(data.error);
+                }
                 if (data.content) {
                   fullResponse += data.content;
                   setStreamingContent(fullResponse);
@@ -278,18 +286,27 @@ export default function ChatPage() {
                     setPreviewCode({ code: htmlMatch[1], language: "html" });
                   }
                 }
-              } catch {}
+              } catch (parseErr: any) {
+                if (parseErr?.message && parseErr.message !== "Unexpected end of JSON input") {
+                  throw parseErr;
+                }
+              }
             }
           }
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error sending message:", error);
-    } finally {
+      const errorMsg = `⚠️ Error: ${error.message || "Failed to get response. Please try a different model."}`;
+      setStreamingContent(errorMsg);
       setIsStreaming(false);
-      setStreamingContent("");
       queryClient.invalidateQueries({ queryKey: ["/api/conversations", convId] });
+      setTimeout(() => setStreamingContent(""), 6000);
+      return;
     }
+    setIsStreaming(false);
+    setStreamingContent("");
+    queryClient.invalidateQueries({ queryKey: ["/api/conversations", convId] });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
