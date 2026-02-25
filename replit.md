@@ -9,7 +9,7 @@ A comprehensive AI business operating system (formerly JARVIS) with Lovable-styl
 - **Database**: PostgreSQL with Drizzle ORM
 - **AI Provider**: OpenRouter via Replit AI Integrations (no API key needed)
 - **GitHub**: Real GitHub API via Replit Connector (@octokit/rest)
-- **Email**: Nodemailer (SMTP send) + ImapFlow (IMAP receive)
+- **Email**: Gmail API via Replit Connector (OAuth, no API key needed)
 - **Auth**: Session-based password authentication
 
 ## Key Files
@@ -19,6 +19,9 @@ A comprehensive AI business operating system (formerly JARVIS) with Lovable-styl
 - `server/storage.ts` - Database CRUD operations (DatabaseStorage class)
 - `server/db.ts` - PostgreSQL connection
 - `server/github-client.ts` - GitHub OAuth client via Replit Connector (never cache client)
+- `server/gmail-client.ts` - Gmail OAuth client via Replit Connector (send, inbox, threads)
+- `server/lead-scraper.ts` - DuckDuckGo lead scouting (no API key needed)
+- `server/email-queue.ts` - Email queue worker with human-like delays (uses Gmail)
 - `server/replit_integrations/chat/routes.ts` - OpenRouter chat with streaming + system prompts
 - `client/src/App.tsx` - Main app with routing, sidebar, theme, auth
 - `client/src/components/markdown-renderer.tsx` - Markdown + artifact cards (code hidden behind cards)

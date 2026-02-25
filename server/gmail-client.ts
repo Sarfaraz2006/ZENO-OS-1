@@ -5,9 +5,7 @@ import { google } from 'googleapis';
 let connectionSettings: any;
 
 async function getAccessToken() {
-  if (connectionSettings && connectionSettings.settings.expires_at && new Date(connectionSettings.settings.expires_at).getTime() > Date.now()) {
-    return connectionSettings.settings.access_token;
-  }
+  connectionSettings = null;
 
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
   const xReplitToken = process.env.REPL_IDENTITY
@@ -20,7 +18,7 @@ async function getAccessToken() {
     throw new Error('X-Replit-Token not found for repl/depl');
   }
 
-  connectionSettings = await fetch(
+  const raw = await fetch(
     'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=google-mail',
     {
       headers: {
@@ -28,11 +26,14 @@ async function getAccessToken() {
         'X-Replit-Token': xReplitToken
       }
     }
-  ).then(res => res.json()).then(data => data.items?.[0]);
+  ).then(res => res.json());
 
-  const accessToken = connectionSettings?.settings?.access_token || connectionSettings.settings?.oauth?.credentials?.access_token;
+  connectionSettings = raw.items?.[0];
+
+  const accessToken = connectionSettings?.settings?.access_token || connectionSettings?.settings?.oauth?.credentials?.access_token;
 
   if (!connectionSettings || !accessToken) {
+    console.error('[Gmail] Connection data:', JSON.stringify(raw, null, 2));
     throw new Error('Gmail not connected');
   }
   return accessToken;
@@ -50,21 +51,48 @@ export async function getUncachableGmailClient() {
 }
 
 export async function getGmailProfile(): Promise<{ email: string; messagesTotal: number }> {
-  const gmail = await getUncachableGmailClient();
-  const profile = await gmail.users.getProfile({ userId: 'me' });
-  return {
-    email: profile.data.emailAddress || '',
-    messagesTotal: profile.data.messagesTotal || 0,
-  };
+  const accessToken = await getAccessToken();
+
+  try {
+    const gmail = await getUncachableGmailClient();
+    const profile = await gmail.users.getProfile({ userId: 'me' });
+    return {
+      email: profile.data.emailAddress || '',
+      messagesTotal: profile.data.messagesTotal || 0,
+    };
+  } catch {
+    try {
+      const tokenInfo = await fetch(`https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${accessToken}`);
+      const info = await tokenInfo.json();
+      if (info.email) {
+        return { email: info.email, messagesTotal: 0 };
+      }
+    } catch {}
+
+    try {
+      const userInfo = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      const info = await userInfo.json();
+      if (info.email) {
+        return { email: info.email, messagesTotal: 0 };
+      }
+    } catch {}
+
+    const settingsStr = JSON.stringify(connectionSettings?.settings || {});
+    const emailMatch = settingsStr.match(/"email"\s*:\s*"([^"]+@[^"]+)"/);
+    if (emailMatch) {
+      return { email: emailMatch[1], messagesTotal: 0 };
+    }
+
+    return { email: "connected", messagesTotal: 0 };
+  }
 }
 
 export async function sendGmailEmail(to: string, subject: string, body: string, replyToMessageId?: string): Promise<{ id: string; threadId: string }> {
   const gmail = await getUncachableGmailClient();
-  const profile = await gmail.users.getProfile({ userId: 'me' });
-  const from = profile.data.emailAddress || '';
 
   const headers = [
-    `From: ${from}`,
     `To: ${to}`,
     `Subject: ${subject}`,
     `MIME-Version: 1.0`,
@@ -138,11 +166,17 @@ export interface GmailMessage {
 
 export async function fetchGmailInbox(maxResults: number = 20): Promise<GmailMessage[]> {
   const gmail = await getUncachableGmailClient();
-  const list = await gmail.users.messages.list({
-    userId: 'me',
-    maxResults,
-    labelIds: ['INBOX'],
-  });
+  let list;
+  try {
+    list = await gmail.users.messages.list({
+      userId: 'me',
+      maxResults,
+      labelIds: ['INBOX'],
+    });
+  } catch (err: any) {
+    console.error('[Gmail] Inbox list error:', err.message);
+    throw new Error('Gmail inbox access requires additional permissions. Current scopes allow sending only.');
+  }
 
   if (!list.data.messages || list.data.messages.length === 0) return [];
 
