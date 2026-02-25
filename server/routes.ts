@@ -171,6 +171,79 @@ export async function registerRoutes(
     }
   });
 
+  let openrouterModelsCache: { data: any[]; ts: number } = { data: [], ts: 0 };
+
+  app.get("/api/openrouter/models", requireAuth, async (req, res) => {
+    try {
+      const now = Date.now();
+      if (openrouterModelsCache.data.length > 0 && now - openrouterModelsCache.ts < 10 * 60 * 1000) {
+        return res.json(openrouterModelsCache.data);
+      }
+      const response = await fetch("https://openrouter.ai/api/v1/models");
+      const json = await response.json();
+      const models = (json.data || []).map((m: any) => ({
+        id: m.id,
+        name: m.name,
+        description: m.description || "",
+        contextLength: m.context_length || 8192,
+        promptPrice: m.pricing?.prompt || "0",
+        completionPrice: m.pricing?.completion || "0",
+        isFree: parseFloat(m.pricing?.prompt || "0") === 0 && parseFloat(m.pricing?.completion || "0") === 0,
+        architecture: m.architecture?.modality || "text",
+        topProvider: m.top_provider?.max_completion_tokens || 4096,
+      }));
+      openrouterModelsCache = { data: models, ts: now };
+      res.json(models);
+    } catch (error) {
+      console.error("Failed to fetch OpenRouter models:", error);
+      res.status(500).json({ error: "Failed to fetch OpenRouter model catalog" });
+    }
+  });
+
+  app.post("/api/models/quick-add", requireAuth, async (req, res) => {
+    try {
+      const { modelId, name, description, contextWindow, inputCost, outputCost, category } = req.body;
+      if (!modelId || !name) return res.status(400).json({ error: "Model ID and name required" });
+      const existing = await storage.getModelByModelId(modelId);
+      if (existing) return res.status(400).json({ error: "Model already added" });
+      const model = await storage.createModel({
+        name, modelId, description: description || "", category: category || "general",
+        contextWindow: contextWindow || 8192, inputCost: inputCost || "0", outputCost: outputCost || "0",
+      });
+      await storage.createLog({ action: "Model added from catalog", details: `${name} (${modelId})`, source: "models" });
+      res.status(201).json(model);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to add model" });
+    }
+  });
+
+  app.post("/api/models/sync-free", requireAuth, async (_req, res) => {
+    try {
+      const response = await fetch("https://openrouter.ai/api/v1/models");
+      const json = await response.json();
+      const freeModels = (json.data || []).filter((m: any) =>
+        parseFloat(m.pricing?.prompt || "1") === 0 && parseFloat(m.pricing?.completion || "1") === 0
+      );
+      let added = 0;
+      let skipped = 0;
+      for (const m of freeModels) {
+        const existing = await storage.getModelByModelId(m.id);
+        if (existing) { skipped++; continue; }
+        await storage.createModel({
+          name: m.name, modelId: m.id, description: m.description || "Free model from OpenRouter",
+          category: "general", contextWindow: m.context_length || 8192,
+          inputCost: "0", outputCost: "0",
+        });
+        added++;
+      }
+      await storage.createLog({ action: `Free models synced: ${added} added, ${skipped} already exist`, source: "models" });
+      res.json({ success: true, added, skipped, total: freeModels.length });
+    } catch (error) {
+      console.error("Free model sync failed:", error);
+      res.status(500).json({ error: "Failed to sync free models" });
+    }
+  });
+
   app.get("/api/ai-providers", requireAuth, async (_req, res) => {
     try {
       const providers = await storage.getAllAiProviders();

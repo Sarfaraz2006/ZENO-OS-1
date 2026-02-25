@@ -82,6 +82,8 @@ A comprehensive AI business operating system (formerly JARVIS) with Lovable-styl
 27. **Stripe Integration** - Manual API key entry (Secret Key, Webhook Secret) - user dismissed Replit OAuth
 28. **n8n Webhook** - POST /api/business/webhook/n8n - status shows "Not Tested" until first webhook received
 29. **Business Brain** - AI-powered business intelligence: health score, rule-based + AI insights, "Ask Brain" Q&A, quick questions
+32. **In-app Model Browser** - Browse 300+ OpenRouter models, one-click add, search/filter
+33. **Free Models Sync** - Auto-discover and add all free OpenRouter models with one button
 
 ## Business Board
 - Overview tab: Email/WhatsApp/Payment/Automation stat cards, email activity chart, channel distribution pie chart, integration status cards, recent emails
