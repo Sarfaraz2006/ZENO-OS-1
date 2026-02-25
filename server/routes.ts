@@ -8,6 +8,7 @@ import { analyzeBusinessWithRules, analyzeBusinessWithAI, getBusinessContextForC
 import { scrapeAndSaveLeads } from "./lead-scraper";
 import { startEmailQueueWorker, queueEmailsForLeads } from "./email-queue";
 import { detectTaskType, selectModelForTask, getTaskLabel } from "./model-router";
+import { sendGmailEmail, fetchGmailInbox, fetchGmailThread, getGmailProfile } from "./gmail-client";
 
 function hashPassword(password: string): string {
   return createHash("sha256").update(password).digest("hex");
@@ -496,43 +497,29 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/gmail/profile", requireAuth, async (_req, res) => {
+    try {
+      const profile = await getGmailProfile();
+      res.json(profile);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Gmail not connected" });
+    }
+  });
+
   app.post("/api/email/send", requireAuth, async (req, res) => {
     try {
       const { to, subject, body } = req.body;
       if (!to || !subject || !body) return res.status(400).json({ error: "to, subject, and body are required" });
 
-      const host = await storage.getSetting("smtp_host");
-      const port = await storage.getSetting("smtp_port");
-      const user = await storage.getSetting("smtp_user");
-      const pass = await storage.getSetting("smtp_pass");
-      const from = await storage.getSetting("smtp_from");
-
-      if (!host?.value || !user?.value || !pass?.value) {
-        return res.status(400).json({ error: "SMTP not configured. Please set up SMTP settings first." });
-      }
-
-      const nodemailer = await import("nodemailer");
-      const transporter = nodemailer.createTransport({
-        host: host.value,
-        port: parseInt(port?.value || "587"),
-        secure: parseInt(port?.value || "587") === 465,
-        auth: { user: user.value, pass: pass.value },
-      });
-
-      await transporter.sendMail({
-        from: from?.value || user.value,
-        to,
-        subject,
-        text: body,
-        html: body.replace(/\n/g, "<br>"),
-      });
+      const profile = await getGmailProfile();
+      const result = await sendGmailEmail(to, subject, body);
 
       await storage.createBusinessEmail({
-        direction: "sent", fromAddr: from?.value || user.value, toAddr: to,
-        subject, body, status: "sent",
+        direction: "sent", fromAddr: profile.email, toAddr: to,
+        subject, body, status: "sent", messageId: result.id, threadId: result.threadId,
       });
-      await storage.createLog({ action: "Email sent", details: `To: ${to}, Subject: ${subject}`, source: "email" });
-      res.json({ success: true, message: "Email sent successfully" });
+      await storage.createLog({ action: "Email sent via Gmail", details: `To: ${to}, Subject: ${subject}`, source: "email" });
+      res.json({ success: true, message: "Email sent via Gmail", messageId: result.id });
     } catch (error: any) {
       res.status(500).json({ error: error.message || "Failed to send email" });
     }
@@ -605,38 +592,18 @@ export async function registerRoutes(
       const { to, subject, body, originalId } = req.body;
       if (!to || !subject || !body) return res.status(400).json({ error: "to, subject, and body required" });
 
-      const host = await storage.getSetting("smtp_host");
-      const port = await storage.getSetting("smtp_port");
-      const user = await storage.getSetting("smtp_user");
-      const pass = await storage.getSetting("smtp_pass");
-      const from = await storage.getSetting("smtp_from");
-
-      if (!host?.value || !user?.value || !pass?.value) {
-        return res.status(400).json({ error: "SMTP not configured" });
-      }
-
-      const nodemailer = await import("nodemailer");
-      const transporter = nodemailer.createTransport({
-        host: host.value,
-        port: parseInt(port?.value || "587"),
-        secure: parseInt(port?.value || "587") === 465,
-        auth: { user: user.value, pass: pass.value },
-      });
-
-      await transporter.sendMail({
-        from: from?.value || user.value, to,
-        subject: subject.startsWith("Re:") ? subject : `Re: ${subject}`,
-        text: body, html: body.replace(/\n/g, "<br>"),
-      });
+      const profile = await getGmailProfile();
+      const replySubject = subject.startsWith("Re:") ? subject : `Re: ${subject}`;
+      const result = await sendGmailEmail(to, replySubject, body, originalId || undefined);
 
       await storage.createBusinessEmail({
-        direction: "sent", fromAddr: from?.value || user.value, toAddr: to,
-        subject: subject.startsWith("Re:") ? subject : `Re: ${subject}`,
-        body, status: "replied", threadId: originalId ? String(originalId) : undefined,
+        direction: "sent", fromAddr: profile.email, toAddr: to,
+        subject: replySubject, body, status: "replied",
+        messageId: result.id, threadId: result.threadId,
       });
 
-      await storage.createLog({ action: "Email replied", details: `To: ${to}`, source: "email" });
-      res.json({ success: true });
+      await storage.createLog({ action: "Email replied via Gmail", details: `To: ${to}`, source: "email" });
+      res.json({ success: true, messageId: result.id });
     } catch (error: any) {
       res.status(500).json({ error: error.message || "Failed to send reply" });
     }
@@ -644,61 +611,38 @@ export async function registerRoutes(
 
   app.post("/api/email/check-inbox", requireAuth, async (_req, res) => {
     try {
-      const host = await storage.getSetting("smtp_host");
-      const user = await storage.getSetting("smtp_user");
-      const pass = await storage.getSetting("smtp_pass");
-
-      if (!host?.value || !user?.value || !pass?.value) {
-        return res.status(400).json({ error: "SMTP not configured" });
-      }
-
-      const imapHost = host.value.replace("smtp.", "imap.");
-      const { ImapFlow } = await import("imapflow");
-      const client = new ImapFlow({
-        host: imapHost, port: 993, secure: true,
-        auth: { user: user.value, pass: pass.value },
-        logger: false,
-      });
-
-      await client.connect();
-      const lock = await client.getMailboxLock("INBOX");
-      const newEmails: any[] = [];
-
-      try {
-        const msgs = client.fetch({ seq: `${Math.max(1, Number(client.mailbox?.exists || 1) - 9)}:*` }, {
-          envelope: true, source: false,
-        });
-        for await (const msg of msgs) {
-          const env = msg.envelope;
-          if (env) {
-            const fromAddr = env.from?.[0]?.address || "";
-            const toAddr = env.to?.[0]?.address || user.value;
-            newEmails.push({
-              direction: "received",
-              fromAddr,
-              toAddr,
-              subject: env.subject || "(No subject)",
-              status: "received",
-              messageId: env.messageId || undefined,
-            });
-          }
-        }
-      } finally {
-        lock.release();
-      }
-      await client.logout();
-
+      const messages = await fetchGmailInbox(20);
       let saved = 0;
-      for (const email of newEmails) {
+
+      for (const msg of messages) {
         try {
-          await storage.createBusinessEmail(email);
+          await storage.createBusinessEmail({
+            direction: "received",
+            fromAddr: msg.from,
+            toAddr: msg.to,
+            subject: msg.subject || "(No subject)",
+            body: msg.body || msg.snippet,
+            status: "received",
+            messageId: msg.id,
+            threadId: msg.threadId,
+          });
           saved++;
         } catch {}
       }
 
-      res.json({ success: true, fetched: newEmails.length, saved });
+      await storage.createLog({ action: "Gmail inbox checked", details: `Fetched ${messages.length}, saved ${saved} new`, source: "email" });
+      res.json({ success: true, fetched: messages.length, saved });
     } catch (error: any) {
       res.status(500).json({ error: error.message || "Failed to check inbox" });
+    }
+  });
+
+  app.get("/api/gmail/thread/:threadId", requireAuth, async (req, res) => {
+    try {
+      const thread = await fetchGmailThread(req.params.threadId);
+      res.json(thread);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to fetch thread" });
     }
   });
 
@@ -718,9 +662,15 @@ export async function registerRoutes(
   app.get("/api/integrations/status", requireAuth, async (_req, res) => {
     try {
       const n8nWebhookUrl = `${process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : ""}/api/business/webhook/n8n`;
-      const smtpHost = await storage.getSetting("smtp_host");
-      const smtpConfigured = !!smtpHost?.value;
-      
+
+      let gmailConnected = false;
+      let gmailEmail = "";
+      try {
+        const profile = await getGmailProfile();
+        gmailConnected = !!profile.email;
+        gmailEmail = profile.email;
+      } catch {}
+
       const twilioSetting = await storage.getSetting("twilio_connected");
       const twilioConnected = twilioSetting?.value === "true";
 
@@ -731,7 +681,7 @@ export async function registerRoutes(
       const n8nTested = Number(n8nRuns?.metricValue || 0) > 0;
 
       res.json({
-        email: { connected: smtpConfigured, label: smtpConfigured ? "Connected" : "Not Configured" },
+        email: { connected: gmailConnected, label: gmailConnected ? `Gmail: ${gmailEmail}` : "Not Connected", provider: "gmail" },
         whatsapp: { connected: twilioConnected, label: twilioConnected ? "Connected" : "Not Connected" },
         stripe: { connected: stripeConnected, label: stripeConnected ? "Connected" : "Not Connected" },
         n8n: { connected: n8nTested, webhookUrl: n8nWebhookUrl, label: n8nTested ? "Active" : "Not Tested" },

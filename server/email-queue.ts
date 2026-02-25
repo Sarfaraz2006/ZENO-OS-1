@@ -1,4 +1,5 @@
 import { storage } from "./storage";
+import { sendGmailEmail, getGmailProfile } from "./gmail-client";
 
 let queueInterval: NodeJS.Timeout | null = null;
 
@@ -13,47 +14,25 @@ async function processNextEmail(): Promise<void> {
   try {
     await storage.updateEmailQueueItem(item.id, { status: "sending" });
 
-    const host = await storage.getSetting("smtp_host");
-    const port = await storage.getSetting("smtp_port");
-    const user = await storage.getSetting("smtp_user");
-    const pass = await storage.getSetting("smtp_pass");
-    const from = await storage.getSetting("smtp_from");
-
-    if (!host?.value || !user?.value || !pass?.value) {
-      await storage.updateEmailQueueItem(item.id, { status: "failed", error: "SMTP not configured" });
-      return;
-    }
-
-    const nodemailer = await import("nodemailer");
-    const transporter = nodemailer.createTransport({
-      host: host.value,
-      port: parseInt(port?.value || "587"),
-      secure: parseInt(port?.value || "587") === 465,
-      auth: { user: user.value, pass: pass.value },
-    });
-
-    await transporter.sendMail({
-      from: from?.value || user.value,
-      to: item.toAddr,
-      subject: item.subject,
-      text: item.body,
-      html: item.body.replace(/\n/g, "<br>"),
-    });
+    const profile = await getGmailProfile();
+    const result = await sendGmailEmail(item.toAddr, item.subject, item.body);
 
     await storage.updateEmailQueueItem(item.id, { status: "sent", sentAt: new Date() });
 
     await storage.createBusinessEmail({
       direction: "sent",
-      fromAddr: from?.value || user.value,
+      fromAddr: profile.email,
       toAddr: item.toAddr,
       subject: item.subject,
       body: item.body,
       status: "sent",
+      messageId: result.id,
+      threadId: result.threadId,
       workspaceId: item.workspaceId,
     });
 
     await storage.createLog({
-      action: "[ZENO] Email Sent",
+      action: "[ZENO] Email Sent via Gmail",
       details: `To: ${item.toAddr} | Subject: ${item.subject}`,
       source: "email_queue",
       workspaceId: item.workspaceId,
