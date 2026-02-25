@@ -2,6 +2,7 @@ import type { Express, Request, Response } from "express";
 import OpenAI from "openai";
 import { chatStorage } from "./storage";
 import { getActiveAIClient } from "../../ai-client";
+import { selectModelForMessage } from "../../model-router";
 
 export function registerChatRoutes(app: Express): void {
   // Get all conversations
@@ -61,16 +62,14 @@ export function registerChatRoutes(app: Express): void {
   app.post("/api/conversations/:id/messages", async (req: Request, res: Response) => {
     try {
       const conversationId = parseInt(req.params.id);
-      const { content, model = "meta-llama/llama-3.3-70b-instruct", systemPrompt } = req.body;
+      const { content, model, systemPrompt } = req.body;
+      const userExplicitModel = model && model !== "auto";
 
-      // Save user message
       await chatStorage.createMessage(conversationId, "user", content);
 
-      // Get conversation history for context
       const messages = await chatStorage.getMessagesByConversation(conversationId);
       const chatMessages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [];
 
-      // Add system prompt if provided
       if (systemPrompt) {
         chatMessages.push({ role: "system", content: systemPrompt });
       }
@@ -80,15 +79,28 @@ export function registerChatRoutes(app: Express): void {
         content: m.content,
       })));
 
-      // Set up SSE
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
 
-      const { client: aiClient, providerName, providerType, defaultModel } = await getActiveAIClient();
-      const finalModel = model === "meta-llama/llama-3.3-70b-instruct" && providerType !== "openrouter" ? defaultModel : model;
+      let finalModel: string;
+      let routingInfo: { tier?: string; reason?: string; taskType?: string } = {};
 
-      res.write(`data: ${JSON.stringify({ provider: providerName, model: finalModel })}\n\n`);
+      if (userExplicitModel) {
+        finalModel = model;
+        routingInfo = { reason: "User selected" };
+      } else {
+        const routed = await selectModelForMessage(content);
+        finalModel = routed.modelId;
+        routingInfo = { tier: routed.tier, reason: routed.reason, taskType: routed.taskType };
+      }
+
+      const { client: aiClient, providerName, providerType, defaultModel } = await getActiveAIClient();
+      if (providerType !== "openrouter" && !userExplicitModel) {
+        finalModel = defaultModel;
+      }
+
+      res.write(`data: ${JSON.stringify({ provider: providerName, model: finalModel, routing: routingInfo })}\n\n`);
 
       const stream = await aiClient.chat.completions.create({
         model: finalModel,

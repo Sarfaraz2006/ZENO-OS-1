@@ -92,7 +92,8 @@ For explanations, use clean markdown formatting.`;
 export default function ChatPage() {
   const [activeConversation, setActiveConversation] = useState<number | null>(null);
   const [input, setInput] = useState("");
-  const [selectedModel, setSelectedModel] = useState("meta-llama/llama-3.3-70b-instruct");
+  const [selectedModel, setSelectedModel] = useState("auto");
+  const [routingInfo, setRoutingInfo] = useState<{ tier?: string; reason?: string; model?: string } | null>(null);
   const [streamingContent, setStreamingContent] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -241,6 +242,7 @@ export default function ChatPage() {
     inputRef.current = "";
     setIsStreaming(true);
     setStreamingContent("");
+    setRoutingInfo(null);
 
     try {
       const response = await fetch(`/api/conversations/${convId}/messages`, {
@@ -274,6 +276,9 @@ export default function ChatPage() {
                 const data = JSON.parse(line.slice(6));
                 if (data.error) {
                   throw new Error(data.error);
+                }
+                if (data.routing) {
+                  setRoutingInfo({ ...data.routing, model: data.model });
                 }
                 if (data.content) {
                   fullResponse += data.content;
@@ -425,15 +430,22 @@ export default function ChatPage() {
                 </Tooltip>
               )}
               <Select value={selectedModel} onValueChange={setSelectedModel}>
-                <SelectTrigger className="w-[180px] h-8 text-xs" data-testid="select-model">
+                <SelectTrigger className="w-[200px] h-8 text-xs" data-testid="select-model">
                   <SelectValue placeholder="Select model" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="auto" data-testid="model-option-auto">
+                    <span className="flex items-center gap-2 text-xs">
+                      <Sparkles className="w-3 h-3 text-amber-500" />
+                      Auto (Smart Router)
+                    </span>
+                  </SelectItem>
                   {enabledModels.map((model) => (
                     <SelectItem key={model.id} value={model.modelId} data-testid={`model-option-${model.id}`}>
                       <span className="flex items-center gap-2 text-xs">
                         <Cpu className="w-3 h-3 text-muted-foreground" />
                         {model.name}
+                        {model.inputCost === "0" && <Badge variant="secondary" className="text-[8px] px-1 py-0 ml-1">FREE</Badge>}
                       </span>
                     </SelectItem>
                   ))}
@@ -444,7 +456,12 @@ export default function ChatPage() {
                   )}
                 </SelectContent>
               </Select>
-              {currentModel && (
+              {routingInfo && isStreaming && (
+                <Badge variant={routingInfo.tier === "free" ? "secondary" : "default"} className="text-[10px] hidden md:flex gap-1 animate-in fade-in">
+                  {routingInfo.tier === "free" ? "🟢 Free" : "🔷 Paid"} · {routingInfo.reason}
+                </Badge>
+              )}
+              {!isStreaming && currentModel && selectedModel !== "auto" && (
                 <Badge variant="outline" className="text-[10px] hidden md:flex">
                   {currentModel.inputCost === "0" ? "Free" : `$${currentModel.inputCost}/M`}
                 </Badge>
@@ -647,12 +664,17 @@ export default function ChatPage() {
                       <Bot className="w-3.5 h-3.5 text-primary animate-pulse" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <span className="text-xs font-medium">Zeno</span>
                         <Badge variant="outline" className="text-[10px] gap-1 h-4 px-1.5 animate-pulse">
                           <Loader2 className="w-2.5 h-2.5 animate-spin" />
                           Generating
                         </Badge>
+                        {routingInfo && (
+                          <Badge variant={routingInfo.tier === "free" ? "secondary" : "default"} className="text-[10px] h-4 px-1.5">
+                            {routingInfo.tier === "free" ? "🟢" : "🔷"} {routingInfo.model?.split("/").pop()} · {routingInfo.reason}
+                          </Badge>
+                        )}
                       </div>
                       <div className="text-sm leading-relaxed">
                         <MarkdownRenderer content={streamingContent} onPreview={handlePreview} />
@@ -666,9 +688,18 @@ export default function ChatPage() {
                     <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
                       <Bot className="w-3.5 h-3.5 text-primary animate-pulse" />
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                      <span className="text-sm text-muted-foreground">Thinking...</span>
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                        <span className="text-sm text-muted-foreground">
+                          {routingInfo ? `Routing to ${routingInfo.model?.split("/").pop()}...` : "Selecting model..."}
+                        </span>
+                      </div>
+                      {routingInfo && (
+                        <Badge variant={routingInfo.tier === "free" ? "secondary" : "default"} className="text-[10px] w-fit px-1.5">
+                          {routingInfo.tier === "free" ? "🟢 Free tier" : "🔷 Paid tier"} · {routingInfo.reason}
+                        </Badge>
+                      )}
                     </div>
                   </div>
                 )}

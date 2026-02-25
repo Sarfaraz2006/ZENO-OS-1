@@ -7,7 +7,7 @@ import { randomBytes, createHash } from "crypto";
 import { analyzeBusinessWithRules, analyzeBusinessWithAI, getBusinessContextForChat } from "./business-brain";
 import { scrapeAndSaveLeads } from "./lead-scraper";
 import { startEmailQueueWorker, queueEmailsForLeads } from "./email-queue";
-import { detectTaskType, selectModelForTask, getTaskLabel } from "./model-router";
+import { detectTaskType, selectModelForTask, selectModelForMessage, getTaskLabel } from "./model-router";
 import { sendGmailEmail, fetchGmailInbox, fetchGmailThread, getGmailProfile } from "./gmail-client";
 import { startAutonomousAgent, stopAutonomousAgent, isAgentRunning } from "./autonomous-agent";
 
@@ -1292,9 +1292,8 @@ Reply in this exact JSON format (no markdown, no code blocks):
     try {
       const { message, preferredModel } = req.body;
       if (!message) return res.status(400).json({ error: "Message required" });
-      const taskType = detectTaskType(message);
-      const modelId = await selectModelForTask(taskType, preferredModel);
-      res.json({ taskType, taskLabel: getTaskLabel(taskType), selectedModel: modelId });
+      const result = await selectModelForMessage(message, preferredModel);
+      res.json({ taskType: result.taskType, taskLabel: getTaskLabel(result.taskType), selectedModel: result.modelId, tier: result.tier, reason: result.reason });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

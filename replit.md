@@ -13,11 +13,13 @@ A comprehensive AI business operating system (formerly JARVIS) with Lovable-styl
 - **Email Read**: IMAP via Gmail App Password (imap.gmail.com)
 - **Autonomous Agent**: Auto-reply with AI sentiment analysis
 - **Multi-Provider AI**: OpenRouter (built-in), OpenAI, Anthropic, Gemini, Custom endpoints (Ollama/LocalAI)
+- **Smart Model Router**: Free models first for simple tasks, auto-escalates to paid for complex tasks
 - **Auth**: Session-based password authentication (currently disabled for testing)
 
 ## Key Files
 - `shared/schema.ts` - All database schemas (users, aiModels, apiKeys, activityLogs, settings, githubRepos, businessEmails, businessContacts, businessMetrics, aiProviders)
 - `server/ai-client.ts` - Multi-provider AI client factory (OpenAI, Anthropic, Gemini, Custom, OpenRouter fallback)
+- `server/model-router.ts` - Smart model router (free-first, auto-escalate to paid for complex tasks)
 - `shared/models/chat.ts` - Chat-specific schemas (conversations, messages)
 - `server/routes.ts` - All API endpoints (auth, models, API keys, stats, logs, terminal, github, email, business)
 - `server/storage.ts` - Database CRUD operations (DatabaseStorage class)
