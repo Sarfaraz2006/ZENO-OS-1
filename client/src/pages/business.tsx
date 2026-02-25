@@ -58,6 +58,8 @@ import {
   MessageSquare,
   Zap,
   Trash2,
+  Bot,
+  Power,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -224,7 +226,7 @@ export default function BusinessPage() {
 
   const checkInbox = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/email/check-inbox", {});
+      const res = await apiRequest("POST", "/api/email/check-inbox-imap", {});
       return res.json();
     },
     onSuccess: (data) => {
@@ -233,14 +235,24 @@ export default function BusinessPage() {
       toast({ title: "Inbox checked", description: `${data.fetched} emails found, ${data.saved} new` });
     },
     onError: (error: Error) => {
-      const isPermissionError = error.message?.includes("permission") || error.message?.includes("Permission");
-      toast({
-        title: isPermissionError ? "Inbox reading limited" : "Failed to check inbox",
-        description: isPermissionError
-          ? "Gmail is connected for sending emails. Inbox reading requires additional Google permissions. Check your Gmail app directly for received emails."
-          : error.message,
-        variant: isPermissionError ? "default" : "destructive",
-      });
+      toast({ title: "Failed to check inbox", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const { data: agentStatus } = useQuery<{ running: boolean }>({
+    queryKey: ["/api/agent/status"],
+    refetchInterval: 10000,
+  });
+
+  const toggleAgent = useMutation({
+    mutationFn: async () => {
+      const endpoint = agentStatus?.running ? "/api/agent/stop" : "/api/agent/start";
+      const res = await apiRequest("POST", endpoint, {});
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/agent/status"] });
+      toast({ title: data.running ? "Agent activated" : "Agent stopped", description: data.running ? "Autonomous email agent is now running" : "Agent has been deactivated" });
     },
   });
 
@@ -431,6 +443,18 @@ export default function BusinessPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            size="sm"
+            variant={agentStatus?.running ? "default" : "outline"}
+            className={`gap-2 text-xs h-8 ${agentStatus?.running ? "bg-emerald-600 hover:bg-emerald-700 text-white" : ""}`}
+            onClick={() => toggleAgent.mutate()}
+            disabled={toggleAgent.isPending}
+            data-testid="button-toggle-agent"
+          >
+            {toggleAgent.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Bot className="w-3 h-3" />}
+            {agentStatus?.running ? "Agent ON" : "Agent OFF"}
+            {agentStatus?.running && <span className="w-2 h-2 bg-white rounded-full animate-pulse" />}
+          </Button>
           <Button size="sm" variant="outline" className="gap-2 text-xs h-8" onClick={() => checkInbox.mutate()} disabled={checkInbox.isPending} data-testid="button-check-inbox">
             {checkInbox.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Inbox className="w-3 h-3" />}
             Check Inbox

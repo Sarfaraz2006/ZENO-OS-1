@@ -9,6 +9,7 @@ import { scrapeAndSaveLeads } from "./lead-scraper";
 import { startEmailQueueWorker, queueEmailsForLeads } from "./email-queue";
 import { detectTaskType, selectModelForTask, getTaskLabel } from "./model-router";
 import { sendGmailEmail, fetchGmailInbox, fetchGmailThread, getGmailProfile } from "./gmail-client";
+import { startAutonomousAgent, stopAutonomousAgent, isAgentRunning } from "./autonomous-agent";
 
 function hashPassword(password: string): string {
   return createHash("sha256").update(password).digest("hex");
@@ -646,6 +647,87 @@ export async function registerRoutes(
     }
   });
 
+  // === AUTONOMOUS AGENT CONTROL ===
+  app.get("/api/agent/status", requireAuth, async (_req, res) => {
+    res.json({ running: isAgentRunning() });
+  });
+
+  app.post("/api/agent/start", requireAuth, async (_req, res) => {
+    startAutonomousAgent(60000);
+    await storage.createLog({ action: "[ZENO Agent] Manually started", details: "Autonomous agent activated", source: "autonomous" });
+    res.json({ success: true, running: true });
+  });
+
+  app.post("/api/agent/stop", requireAuth, async (_req, res) => {
+    stopAutonomousAgent();
+    await storage.createLog({ action: "[ZENO Agent] Manually stopped", details: "Autonomous agent deactivated", source: "autonomous" });
+    res.json({ success: true, running: false });
+  });
+
+  // === IMAP INBOX CHECK (manual) ===
+  app.post("/api/email/check-inbox-imap", requireAuth, async (_req, res) => {
+    try {
+      if (!process.env.GMAIL_ADDRESS || !process.env.GMAIL_APP_PASSWORD) {
+        return res.status(400).json({ error: "Gmail credentials not configured" });
+      }
+
+      const { ImapFlow } = await import("imapflow");
+      const client = new ImapFlow({
+        host: "imap.gmail.com",
+        port: 993,
+        secure: true,
+        auth: { user: process.env.GMAIL_ADDRESS, pass: process.env.GMAIL_APP_PASSWORD },
+        logger: false,
+      });
+
+      await client.connect();
+      const lock = await client.getMailboxLock("INBOX");
+      const newEmails: any[] = [];
+
+      try {
+        const since = new Date();
+        since.setDate(since.getDate() - 7);
+        const uids = await client.search({ since });
+
+        if (uids && uids.length > 0) {
+          const recentUids = uids.slice(-20);
+          const msgs = client.fetch(recentUids, { envelope: true, uid: true });
+          for await (const msg of msgs) {
+            const env = msg.envelope;
+            if (env) {
+              newEmails.push({
+                direction: "received",
+                fromAddr: env.from?.[0]?.address || "",
+                toAddr: env.to?.[0]?.address || process.env.GMAIL_ADDRESS,
+                subject: env.subject || "(No subject)",
+                body: "",
+                status: "received",
+                messageId: env.messageId || undefined,
+              });
+            }
+          }
+        }
+      } finally {
+        lock.release();
+      }
+      await client.logout();
+
+      let saved = 0;
+      for (const email of newEmails) {
+        try {
+          await storage.createBusinessEmail(email);
+          saved++;
+        } catch {}
+      }
+
+      await storage.createLog({ action: "IMAP inbox checked", details: `Fetched ${newEmails.length}, saved ${saved} new`, source: "email" });
+      res.json({ success: true, fetched: newEmails.length, saved });
+    } catch (error: any) {
+      console.error("IMAP check error:", error);
+      res.status(500).json({ error: error.message || "Failed to check inbox via IMAP" });
+    }
+  });
+
   app.post("/api/business/webhook/n8n", async (req, res) => {
     try {
       const { event, data } = req.body;
@@ -670,6 +752,10 @@ export async function registerRoutes(
         gmailConnected = !!profile.email;
         gmailEmail = profile.email;
       } catch {}
+      if (!gmailConnected && process.env.GMAIL_ADDRESS && process.env.GMAIL_APP_PASSWORD) {
+        gmailConnected = true;
+        gmailEmail = process.env.GMAIL_ADDRESS;
+      }
 
       const twilioSetting = await storage.getSetting("twilio_connected");
       const twilioConnected = twilioSetting?.value === "true";
@@ -1150,6 +1236,7 @@ Reply in this exact JSON format (no markdown, no code blocks):
 
   // Start email queue worker
   startEmailQueueWorker();
+  startAutonomousAgent(60000);
 
   return httpServer;
 }

@@ -9,7 +9,9 @@ A comprehensive AI business operating system (formerly JARVIS) with Lovable-styl
 - **Database**: PostgreSQL with Drizzle ORM
 - **AI Provider**: OpenRouter via Replit AI Integrations (no API key needed)
 - **GitHub**: Real GitHub API via Replit Connector (@octokit/rest)
-- **Email**: Gmail API via Replit Connector (OAuth, no API key needed)
+- **Email Send**: Gmail API via Replit Connector (OAuth)
+- **Email Read**: IMAP via Gmail App Password (imap.gmail.com)
+- **Autonomous Agent**: Auto-reply with AI sentiment analysis
 - **Auth**: Session-based password authentication
 
 ## Key Files
@@ -20,6 +22,7 @@ A comprehensive AI business operating system (formerly JARVIS) with Lovable-styl
 - `server/db.ts` - PostgreSQL connection
 - `server/github-client.ts` - GitHub OAuth client via Replit Connector (never cache client)
 - `server/gmail-client.ts` - Gmail OAuth client via Replit Connector (send, inbox, threads)
+- `server/autonomous-agent.ts` - Autonomous email agent (IMAP inbox scan, AI sentiment analysis, auto-reply)
 - `server/lead-scraper.ts` - DuckDuckGo lead scouting (no API key needed)
 - `server/email-queue.ts` - Email queue worker with human-like delays (uses Gmail)
 - `server/replit_integrations/chat/routes.ts` - OpenRouter chat with streaming + system prompts
@@ -69,8 +72,10 @@ A comprehensive AI business operating system (formerly JARVIS) with Lovable-styl
 21. **PWA support** - installable on mobile/desktop with service worker
 22. Model cost display and context window info
 23. Auto-preview: when AI generates HTML, preview panel opens automatically
-24. **Email System** - Send via SMTP, receive via IMAP, reply functionality
+24. **Email System** - Send via Gmail API, receive via IMAP, reply functionality
 25. **Business Board** - Email inbox/outbox tracking, contact management, WhatsApp/Payment/n8n analytics
+30. **Autonomous Agent** - IMAP inbox monitor, AI sentiment analysis, auto-reply, lead status tracking, Stripe payment links
+31. **Agent Control** - Start/stop autonomous agent from Business Board with live status indicator
 26. **WhatsApp Integration** - Manual Twilio credentials (SID, Auth Token, Phone) - user dismissed Replit OAuth
 27. **Stripe Integration** - Manual API key entry (Secret Key, Webhook Secret) - user dismissed Replit OAuth
 28. **n8n Webhook** - POST /api/business/webhook/n8n - status shows "Not Tested" until first webhook received
@@ -81,8 +86,9 @@ A comprehensive AI business operating system (formerly JARVIS) with Lovable-styl
 - Emails tab: Full inbox/outbox list with compose and reply dialogs
 - Contacts tab: Business contacts with add/manage functionality
 - Brain tab: Health score circle, insight cards (opportunity/warning/trend/suggestion), Deep AI Analysis, Ask Brain Q&A with quick questions
-- Compose email: Send new emails via configured SMTP
-- Check inbox: Fetch emails via IMAP (auto-derives IMAP host from SMTP host)
+- Compose email: Send new emails via Gmail API
+- Check inbox: Fetch emails via IMAP (Gmail App Password)
+- Agent toggle: Start/stop autonomous agent with live status indicator
 - Reply: Reply to received emails with thread tracking
 
 ## GitHub Integration
