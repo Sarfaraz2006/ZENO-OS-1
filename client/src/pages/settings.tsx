@@ -14,6 +14,13 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Settings,
   Key,
   Plus,
@@ -36,9 +43,14 @@ import {
   DollarSign,
   Workflow,
   ExternalLink,
+  Brain,
+  Zap,
+  Star,
+  TestTube,
+  Server,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import type { ApiKey } from "@shared/schema";
+import type { ApiKey, AiProvider } from "@shared/schema";
 
 export default function SettingsPage() {
   const { toast } = useToast();
@@ -241,6 +253,8 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      <AiProvidersSection />
 
       <Card>
         <CardContent className="p-5 space-y-4">
@@ -577,6 +591,322 @@ export default function SettingsPage() {
 
       <IntegrationsSection />
     </div>
+  );
+}
+
+const PROVIDER_OPTIONS = [
+  { value: "openai", label: "OpenAI", placeholder: "sk-...", description: "GPT-4o, GPT-4 Turbo, o1" },
+  { value: "anthropic", label: "Anthropic", placeholder: "sk-ant-...", description: "Claude Sonnet, Opus, Haiku" },
+  { value: "gemini", label: "Google Gemini", placeholder: "AIza...", description: "Gemini 2.0 Flash, Pro" },
+  { value: "openrouter", label: "OpenRouter", placeholder: "sk-or-...", description: "100+ models via OpenRouter" },
+  { value: "custom", label: "Custom Endpoint", placeholder: "API key or 'none'", description: "Ollama, LocalAI, vLLM, etc." },
+];
+
+function AiProvidersSection() {
+  const { toast } = useToast();
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [providerName, setProviderName] = useState("");
+  const [providerType, setProviderType] = useState("");
+  const [providerKey, setProviderKey] = useState("");
+  const [providerUrl, setProviderUrl] = useState("");
+  const [showKey, setShowKey] = useState(false);
+  const [testing, setTesting] = useState(false);
+
+  const { data: providers = [] } = useQuery<AiProvider[]>({
+    queryKey: ["/api/ai-providers"],
+  });
+
+  const createProvider = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/ai-providers", {
+        name: providerName,
+        provider: providerType,
+        apiKey: providerKey,
+        baseUrl: providerType === "custom" ? providerUrl : undefined,
+        isActive: true,
+        isDefault: providers.length === 0,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/ai-providers"] });
+      setDialogOpen(false);
+      setProviderName("");
+      setProviderType("");
+      setProviderKey("");
+      setProviderUrl("");
+      toast({ title: "AI Provider added" });
+    },
+    onError: (e: Error) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
+  });
+
+  const deleteProvider = useMutation({
+    mutationFn: async (id: number) => {
+      await apiRequest("DELETE", `/api/ai-providers/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/ai-providers"] });
+      toast({ title: "Provider removed" });
+    },
+  });
+
+  const setDefault = useMutation({
+    mutationFn: async (id: number) => {
+      await apiRequest("POST", `/api/ai-providers/${id}/set-default`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/ai-providers"] });
+      toast({ title: "Default provider updated" });
+    },
+  });
+
+  const toggleActive = useMutation({
+    mutationFn: async ({ id, isActive }: { id: number; isActive: boolean }) => {
+      await apiRequest("PATCH", `/api/ai-providers/${id}`, { isActive });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/ai-providers"] }),
+  });
+
+  const testConnection = async () => {
+    if (!providerType || !providerKey) return;
+    setTesting(true);
+    try {
+      const res = await apiRequest("POST", "/api/ai-providers/test", {
+        provider: providerType,
+        apiKey: providerKey,
+        baseUrl: providerType === "custom" ? providerUrl : undefined,
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast({ title: "Connection successful!", description: `Model: ${data.model} replied: "${data.reply}"` });
+      } else {
+        toast({ title: "Connection failed", description: data.error, variant: "destructive" });
+      }
+    } catch (e: any) {
+      toast({ title: "Test failed", description: e.message, variant: "destructive" });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const selectedOption = PROVIDER_OPTIONS.find(p => p.value === providerType);
+
+  const providerIcon = (type: string) => {
+    switch (type) {
+      case "openai": return <Zap className="w-3.5 h-3.5 text-emerald-500" />;
+      case "anthropic": return <Brain className="w-3.5 h-3.5 text-orange-500" />;
+      case "gemini": return <Star className="w-3.5 h-3.5 text-blue-500" />;
+      case "openrouter": return <Globe className="w-3.5 h-3.5 text-violet-500" />;
+      case "custom": return <Server className="w-3.5 h-3.5 text-cyan-500" />;
+      default: return <Cpu className="w-3.5 h-3.5 text-muted-foreground" />;
+    }
+  };
+
+  return (
+    <Card>
+      <CardContent className="p-5 space-y-4">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
+              <Brain className="w-4 h-4 text-violet-500" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-sm">AI Providers</h2>
+              <p className="text-xs text-muted-foreground">Connect OpenAI, Anthropic, Gemini, or custom models</p>
+            </div>
+          </div>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button data-testid="button-add-ai-provider" size="sm" className="gap-2 text-xs">
+                <Plus className="w-3 h-3" />
+                Add Provider
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Brain className="w-4 h-4 text-primary" />
+                  Add AI Provider
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 mt-2">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Provider</label>
+                  <Select value={providerType} onValueChange={(v) => {
+                    setProviderType(v);
+                    const opt = PROVIDER_OPTIONS.find(p => p.value === v);
+                    if (opt && !providerName) setProviderName(opt.label);
+                  }}>
+                    <SelectTrigger data-testid="select-provider-type" className="h-9 text-sm">
+                      <SelectValue placeholder="Select provider..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PROVIDER_OPTIONS.map(opt => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          <div className="flex items-center gap-2">
+                            {providerIcon(opt.value)}
+                            <span>{opt.label}</span>
+                            <span className="text-muted-foreground text-[10px] ml-1">{opt.description}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Display Name</label>
+                  <Input
+                    data-testid="input-provider-name"
+                    placeholder="e.g. My OpenAI, Local Ollama"
+                    value={providerName}
+                    onChange={(e) => setProviderName(e.target.value)}
+                    className="h-9 text-sm"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">API Key</label>
+                  <div className="relative">
+                    <Input
+                      data-testid="input-provider-key"
+                      type={showKey ? "text" : "password"}
+                      placeholder={selectedOption?.placeholder || "Enter API key..."}
+                      value={providerKey}
+                      onChange={(e) => setProviderKey(e.target.value)}
+                      className="h-9 text-sm pr-10 font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowKey(!showKey)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                    >
+                      {showKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+
+                {providerType === "custom" && (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Base URL</label>
+                    <Input
+                      data-testid="input-provider-url"
+                      placeholder="http://localhost:11434/v1"
+                      value={providerUrl}
+                      onChange={(e) => setProviderUrl(e.target.value)}
+                      className="h-9 text-sm font-mono"
+                    />
+                    <p className="text-[10px] text-muted-foreground">OpenAI-compatible endpoint URL (Ollama, LocalAI, vLLM, LM Studio)</p>
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <Button
+                    data-testid="button-test-provider"
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 text-xs flex-1"
+                    onClick={testConnection}
+                    disabled={!providerType || !providerKey || testing}
+                  >
+                    {testing ? <Loader2 className="w-3 h-3 animate-spin" /> : <TestTube className="w-3 h-3" />}
+                    {testing ? "Testing..." : "Test Connection"}
+                  </Button>
+                  <Button
+                    data-testid="button-save-provider"
+                    size="sm"
+                    className="gap-2 text-xs flex-1"
+                    onClick={() => createProvider.mutate()}
+                    disabled={!providerName || !providerType || !providerKey || createProvider.isPending}
+                  >
+                    {createProvider.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                    {createProvider.isPending ? "Saving..." : "Save Provider"}
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        <div className="p-3 rounded-lg border border-primary/20 bg-primary/5">
+          <div className="flex items-center gap-2 mb-1">
+            <Globe className="w-3.5 h-3.5 text-primary" />
+            <span className="text-xs font-medium">OpenRouter (Built-in)</span>
+            {providers.length === 0 && (
+              <Badge variant="outline" className="text-[10px] h-5 text-emerald-500 border-emerald-500/30">
+                <Check className="w-2.5 h-2.5 mr-0.5" /> Active
+              </Badge>
+            )}
+          </div>
+          <p className="text-[11px] text-muted-foreground ml-5.5">
+            Free via Replit AI Integrations. Used when no personal provider is set as default.
+          </p>
+        </div>
+
+        {providers.length > 0 && (
+          <div className="space-y-2">
+            {providers.map((p) => (
+              <div
+                key={p.id}
+                data-testid={`ai-provider-item-${p.id}`}
+                className={`flex items-center justify-between gap-3 p-3 rounded-lg border group ${p.isDefault ? "border-primary/30 bg-primary/5" : "border-border/30"}`}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-md bg-muted/50 flex items-center justify-center shrink-0">
+                    {providerIcon(p.provider)}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium">{p.name}</p>
+                      {p.isDefault && (
+                        <Badge variant="outline" className="text-[10px] h-5 text-primary border-primary/30">
+                          Default
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground font-mono">{p.apiKey}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {!p.isDefault && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 text-[10px] px-2"
+                      onClick={() => setDefault.mutate(p.id)}
+                      data-testid={`button-set-default-${p.id}`}
+                    >
+                      <Star className="w-3 h-3 mr-1" />
+                      Set Default
+                    </Button>
+                  )}
+                  <Switch
+                    data-testid={`switch-provider-${p.id}`}
+                    checked={p.isActive}
+                    onCheckedChange={(checked) => toggleActive.mutate({ id: p.id, isActive: checked })}
+                  />
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    data-testid={`button-delete-provider-${p.id}`}
+                    onClick={() => deleteProvider.mutate(p.id)}
+                    className="w-7 h-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {providers.length === 0 && (
+          <p className="text-[11px] text-muted-foreground text-center py-2">
+            Add your own API keys to use OpenAI, Anthropic, Gemini, or local models. The built-in OpenRouter is used by default.
+          </p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

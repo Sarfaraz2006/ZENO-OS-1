@@ -1,10 +1,5 @@
 import { storage } from "./storage";
-import OpenAI from "openai";
-
-const openrouter = new OpenAI({
-  baseURL: process.env.AI_INTEGRATIONS_OPENROUTER_BASE_URL,
-  apiKey: process.env.AI_INTEGRATIONS_OPENROUTER_API_KEY,
-});
+import { getActiveAIClient } from "./ai-client";
 
 export interface BrainInsight {
   type: "opportunity" | "warning" | "trend" | "suggestion" | "summary";
@@ -338,8 +333,9 @@ Priorities: high, medium, low
 
 Focus on actionable intelligence. Be specific with numbers. Don't repeat what's obvious.`;
 
-    const response = await openrouter.chat.completions.create({
-      model: "meta-llama/llama-3.3-70b-instruct",
+    const { client: aiClient, defaultModel } = await getActiveAIClient();
+    const response = await aiClient.chat.completions.create({
+      model: defaultModel,
       messages: [{ role: "user", content: prompt }],
       max_tokens: 2048,
       temperature: 0.3,

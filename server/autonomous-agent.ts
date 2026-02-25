@@ -1,12 +1,7 @@
 import { storage } from "./storage";
 import { sendGmailEmail } from "./gmail-client";
 import { ImapFlow } from "imapflow";
-import OpenAI from "openai";
-
-const openrouter = new OpenAI({
-  baseURL: process.env.AI_INTEGRATIONS_OPENROUTER_BASE_URL,
-  apiKey: process.env.AI_INTEGRATIONS_OPENROUTER_API_KEY,
-});
+import { getActiveAIClient } from "./ai-client";
 
 let agentInterval: NodeJS.Timeout | null = null;
 let isProcessing = false;
@@ -173,8 +168,9 @@ Sign off as "ZENO OS Team"
 Reply in this exact JSON format (no markdown, no code blocks):
 {"sentiment": "one_of_the_categories", "summary": "brief 1-line summary of their email", "suggestedReply": "your full reply email text"}`;
 
-  const completion = await openrouter.chat.completions.create({
-    model: "meta-llama/llama-3.3-70b-instruct",
+  const { client: aiClient, defaultModel } = await getActiveAIClient();
+  const completion = await aiClient.chat.completions.create({
+    model: defaultModel,
     messages: [{ role: "user", content: prompt }],
     max_tokens: 1024,
   });

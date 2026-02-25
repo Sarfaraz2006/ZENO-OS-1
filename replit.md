@@ -12,10 +12,12 @@ A comprehensive AI business operating system (formerly JARVIS) with Lovable-styl
 - **Email Send**: Gmail API via Replit Connector (OAuth)
 - **Email Read**: IMAP via Gmail App Password (imap.gmail.com)
 - **Autonomous Agent**: Auto-reply with AI sentiment analysis
-- **Auth**: Session-based password authentication
+- **Multi-Provider AI**: OpenRouter (built-in), OpenAI, Anthropic, Gemini, Custom endpoints (Ollama/LocalAI)
+- **Auth**: Session-based password authentication (currently disabled for testing)
 
 ## Key Files
-- `shared/schema.ts` - All database schemas (users, aiModels, apiKeys, activityLogs, settings, githubRepos, businessEmails, businessContacts, businessMetrics)
+- `shared/schema.ts` - All database schemas (users, aiModels, apiKeys, activityLogs, settings, githubRepos, businessEmails, businessContacts, businessMetrics, aiProviders)
+- `server/ai-client.ts` - Multi-provider AI client factory (OpenAI, Anthropic, Gemini, Custom, OpenRouter fallback)
 - `shared/models/chat.ts` - Chat-specific schemas (conversations, messages)
 - `server/routes.ts` - All API endpoints (auth, models, API keys, stats, logs, terminal, github, email, business)
 - `server/storage.ts` - Database CRUD operations (DatabaseStorage class)
@@ -105,5 +107,5 @@ A comprehensive AI business operating system (formerly JARVIS) with Lovable-styl
 - Built-in shortcuts: help, clear, time, whoami, status, version, models
 
 ## Database
-PostgreSQL with tables: users, ai_models, api_keys, activity_logs, settings, conversations, messages, github_repos, business_emails, business_contacts, business_metrics
+PostgreSQL with tables: users, ai_models, api_keys, activity_logs, settings, conversations, messages, github_repos, business_emails, business_contacts, business_metrics, aiProviders
 Push schema: `npm run db:push`

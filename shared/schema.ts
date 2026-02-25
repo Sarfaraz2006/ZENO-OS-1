@@ -126,6 +126,17 @@ export const businessLeads = pgTable("business_leads", {
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
+export const aiProviders = pgTable("ai_providers", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  provider: text("provider").notNull(),
+  apiKey: text("api_key").notNull(),
+  baseUrl: text("base_url"),
+  isActive: boolean("is_active").default(false).notNull(),
+  isDefault: boolean("is_default").default(false).notNull(),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
 export const emailQueue = pgTable("email_queue", {
   id: serial("id").primaryKey(),
   workspaceId: integer("workspace_id"),
@@ -216,6 +227,13 @@ export const insertBusinessMetricSchema = createInsertSchema(businessMetrics).om
 });
 export type BusinessMetric = typeof businessMetrics.$inferSelect;
 export type InsertBusinessMetric = z.infer<typeof insertBusinessMetricSchema>;
+
+export const insertAiProviderSchema = createInsertSchema(aiProviders).omit({
+  id: true,
+  createdAt: true,
+});
+export type AiProvider = typeof aiProviders.$inferSelect;
+export type InsertAiProvider = z.infer<typeof insertAiProviderSchema>;
 
 export const insertBusinessLeadSchema = createInsertSchema(businessLeads).omit({
   id: true,

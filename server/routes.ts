@@ -171,6 +171,100 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/ai-providers", requireAuth, async (_req, res) => {
+    try {
+      const providers = await storage.getAllAiProviders();
+      const masked = providers.map(p => ({ ...p, apiKey: p.apiKey.slice(0, 8) + "..." + p.apiKey.slice(-4) }));
+      res.json(masked);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch AI providers" });
+    }
+  });
+
+  app.get("/api/ai-providers/active", requireAuth, async (_req, res) => {
+    try {
+      const active = await storage.getActiveAiProvider();
+      if (active) {
+        res.json({ ...active, apiKey: active.apiKey.slice(0, 8) + "..." + active.apiKey.slice(-4) });
+      } else {
+        res.json({ providerName: "OpenRouter (Replit)", providerType: "openrouter", isDefault: true });
+      }
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch active provider" });
+    }
+  });
+
+  app.post("/api/ai-providers", requireAuth, async (req, res) => {
+    try {
+      const { name, provider, apiKey, baseUrl, isActive, isDefault } = req.body;
+      if (!name || !provider || !apiKey) {
+        return res.status(400).json({ error: "Name, provider type, and API key are required" });
+      }
+      const created = await storage.createAiProvider({ name, provider, apiKey, baseUrl: baseUrl || null, isActive: isActive ?? true, isDefault: isDefault ?? false });
+      if (isDefault) {
+        await storage.setDefaultAiProvider(created.id);
+      }
+      await storage.createLog({ action: `AI Provider added: ${name} (${provider})`, source: "settings" });
+      res.status(201).json({ ...created, apiKey: created.apiKey.slice(0, 8) + "..." + created.apiKey.slice(-4) });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create AI provider" });
+    }
+  });
+
+  app.patch("/api/ai-providers/:id", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const updated = await storage.updateAiProvider(id, req.body);
+      if (!updated) return res.status(404).json({ error: "Provider not found" });
+      res.json({ ...updated, apiKey: updated.apiKey.slice(0, 8) + "..." + updated.apiKey.slice(-4) });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update AI provider" });
+    }
+  });
+
+  app.post("/api/ai-providers/:id/set-default", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.setDefaultAiProvider(id);
+      await storage.createLog({ action: "Default AI provider changed", source: "settings" });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to set default provider" });
+    }
+  });
+
+  app.delete("/api/ai-providers/:id", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteAiProvider(id);
+      await storage.createLog({ action: "AI Provider removed", source: "settings" });
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete AI provider" });
+    }
+  });
+
+  app.post("/api/ai-providers/test", requireAuth, async (req, res) => {
+    try {
+      const { provider, apiKey, baseUrl } = req.body;
+      const OpenAI = (await import("openai")).default;
+      const { getProviderBaseUrl } = await import("./ai-client");
+      const finalUrl = baseUrl || getProviderBaseUrl(provider);
+      const client = new OpenAI({ baseURL: finalUrl, apiKey });
+      const { getProviderDefaultModel } = await import("./ai-client");
+      const model = getProviderDefaultModel(provider);
+      const response = await client.chat.completions.create({
+        model,
+        messages: [{ role: "user", content: "Say 'OK' in one word." }],
+        max_tokens: 10,
+      });
+      const reply = response.choices[0]?.message?.content || "";
+      res.json({ success: true, reply, model });
+    } catch (error: any) {
+      res.status(400).json({ success: false, error: error.message || "Connection failed" });
+    }
+  });
+
   app.get("/api/api-keys", requireAuth, async (_req, res) => {
     try {
       const keys = await storage.getAllApiKeys();

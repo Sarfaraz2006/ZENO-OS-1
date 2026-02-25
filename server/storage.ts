@@ -2,7 +2,7 @@ import {
   users, aiModels, apiKeys, activityLogs, settings,
   conversations, messages, githubRepos,
   businessEmails, businessContacts, businessMetrics,
-  workspaces, businessLeads, emailQueue,
+  workspaces, businessLeads, emailQueue, aiProviders,
   type User, type InsertUser,
   type AiModel, type InsertAiModel,
   type ApiKey, type InsertApiKey,
@@ -16,6 +16,7 @@ import {
   type Workspace, type InsertWorkspace,
   type BusinessLead, type InsertBusinessLead,
   type EmailQueueItem, type InsertEmailQueueItem,
+  type AiProvider, type InsertAiProvider,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, sql, and, isNull, or } from "drizzle-orm";
@@ -81,6 +82,14 @@ export interface IStorage {
   createEmailQueueItem(item: InsertEmailQueueItem): Promise<EmailQueueItem>;
   updateEmailQueueItem(id: number, data: Partial<InsertEmailQueueItem>): Promise<EmailQueueItem | undefined>;
   getNextPendingEmail(): Promise<EmailQueueItem | undefined>;
+
+  getAllAiProviders(): Promise<AiProvider[]>;
+  getAiProvider(id: number): Promise<AiProvider | undefined>;
+  getActiveAiProvider(): Promise<AiProvider | undefined>;
+  createAiProvider(provider: InsertAiProvider): Promise<AiProvider>;
+  updateAiProvider(id: number, data: Partial<InsertAiProvider>): Promise<AiProvider | undefined>;
+  deleteAiProvider(id: number): Promise<void>;
+  setDefaultAiProvider(id: number): Promise<void>;
 }
 
 function wsFilter(workspaceId?: number) {
@@ -371,6 +380,45 @@ export class DatabaseStorage implements IStorage {
       .orderBy(emailQueue.scheduledAt)
       .limit(1);
     return item || undefined;
+  }
+
+  async getAllAiProviders(): Promise<AiProvider[]> {
+    return db.select().from(aiProviders).orderBy(desc(aiProviders.isDefault), aiProviders.name);
+  }
+
+  async getAiProvider(id: number): Promise<AiProvider | undefined> {
+    const [provider] = await db.select().from(aiProviders).where(eq(aiProviders.id, id));
+    return provider || undefined;
+  }
+
+  async getActiveAiProvider(): Promise<AiProvider | undefined> {
+    const [provider] = await db.select().from(aiProviders)
+      .where(and(eq(aiProviders.isActive, true), eq(aiProviders.isDefault, true)))
+      .limit(1);
+    if (provider) return provider;
+    const [anyActive] = await db.select().from(aiProviders)
+      .where(eq(aiProviders.isActive, true))
+      .limit(1);
+    return anyActive || undefined;
+  }
+
+  async createAiProvider(provider: InsertAiProvider): Promise<AiProvider> {
+    const [created] = await db.insert(aiProviders).values(provider).returning();
+    return created;
+  }
+
+  async updateAiProvider(id: number, data: Partial<InsertAiProvider>): Promise<AiProvider | undefined> {
+    const [updated] = await db.update(aiProviders).set(data).where(eq(aiProviders.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async deleteAiProvider(id: number): Promise<void> {
+    await db.delete(aiProviders).where(eq(aiProviders.id, id));
+  }
+
+  async setDefaultAiProvider(id: number): Promise<void> {
+    await db.update(aiProviders).set({ isDefault: false });
+    await db.update(aiProviders).set({ isDefault: true, isActive: true }).where(eq(aiProviders.id, id));
   }
 }
 
