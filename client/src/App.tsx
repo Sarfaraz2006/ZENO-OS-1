@@ -110,12 +110,7 @@ function AuthenticatedApp() {
 }
 
 function AppContent() {
-  const { isAuthenticated } = useAuth();
-
-  if (!isAuthenticated) {
-    return <LoginPage />;
-  }
-
+  // AUTH DISABLED FOR TESTING - re-enable when project is complete
   return <AuthenticatedApp />;
 }
 
