@@ -942,6 +942,109 @@ export async function registerRoutes(
     }
   });
 
+  // === AI OUTREACH EMAIL GENERATION ===
+  app.post("/api/leads/generate-outreach", requireAuth, async (req, res) => {
+    try {
+      const { leadIds } = req.body;
+      if (!leadIds || !Array.isArray(leadIds) || leadIds.length === 0) {
+        return res.status(400).json({ error: "leadIds array required" });
+      }
+
+      const OpenAI = (await import("openai")).default;
+      const openrouter = new OpenAI({
+        baseURL: process.env.AI_INTEGRATIONS_OPENROUTER_BASE_URL,
+        apiKey: process.env.AI_INTEGRATIONS_OPENROUTER_API_KEY,
+      });
+
+      const results: any[] = [];
+
+      for (const leadId of leadIds) {
+        const leads = await storage.getBusinessLeads();
+        const lead = leads.find((l: any) => l.id === leadId);
+        if (!lead) {
+          results.push({ leadId, error: "Lead not found" });
+          continue;
+        }
+
+        const prompt = `You are a professional business development specialist for ZENO OS, an AI automation company. Write a personalized cold outreach email to the following lead:
+
+Company/Name: ${lead.name}
+Website: ${lead.website || "N/A"}
+Description: ${lead.notes || "N/A"}
+
+Our services: AI-powered business automation — intelligent lead generation, smart email campaigns, CRM automation, workflow optimization, and custom AI solutions.
+
+Requirements:
+- Subject line should be compelling and personalized to their business
+- Email body should be 3-4 short paragraphs
+- Reference something specific about their company from the description/name
+- Highlight how our AI automation can help their specific business
+- Professional but friendly tone
+- Include a clear call-to-action (schedule a demo/call)
+- Sign off as "ZENO OS Team"
+
+Reply in this exact JSON format (no markdown, no code blocks):
+{"subject": "your subject line here", "body": "your email body here with \\n for newlines"}`;
+
+        const completion = await openrouter.chat.completions.create({
+          model: "meta-llama/llama-3.3-70b-instruct",
+          messages: [{ role: "user", content: prompt }],
+          max_tokens: 1024,
+        });
+
+        const responseText = completion.choices[0]?.message?.content?.trim() || "";
+        let subject = "";
+        let body = "";
+
+        try {
+          const cleaned = responseText.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+          const parsed = JSON.parse(cleaned);
+          subject = parsed.subject;
+          body = parsed.body;
+        } catch {
+          subject = `AI Automation Solutions for ${lead.name}`;
+          body = responseText;
+        }
+
+        const contactEmail = lead.email || `info@${(lead.website || "").replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0]}`;
+
+        const queueItem = await storage.createEmailQueueItem({
+          toAddr: contactEmail,
+          subject,
+          body,
+          status: "draft",
+          leadId: lead.id,
+          scheduledAt: null,
+          sentAt: null,
+          error: null,
+          workspaceId: lead.workspaceId,
+        });
+
+        await storage.updateBusinessLead(lead.id, { status: "contacted" });
+
+        results.push({
+          leadId: lead.id,
+          leadName: lead.name,
+          queueItemId: queueItem.id,
+          subject,
+          toAddr: contactEmail,
+        });
+
+        await storage.createLog({
+          action: "[ZENO] Outreach Draft Generated",
+          details: `AI draft for ${lead.name}: "${subject}"`,
+          source: "ai",
+          workspaceId: lead.workspaceId,
+        });
+      }
+
+      res.json({ success: true, drafts: results, message: `Generated ${results.length} outreach drafts` });
+    } catch (error: any) {
+      console.error("Outreach generation error:", error);
+      res.status(500).json({ error: error.message || "Failed to generate outreach emails" });
+    }
+  });
+
   // === EMAIL QUEUE ===
   app.get("/api/email-queue", requireAuth, async (req, res) => {
     try {
