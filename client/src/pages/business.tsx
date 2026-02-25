@@ -233,7 +233,14 @@ export default function BusinessPage() {
       toast({ title: "Inbox checked", description: `${data.fetched} emails found, ${data.saved} new` });
     },
     onError: (error: Error) => {
-      toast({ title: "Failed to check inbox", description: error.message, variant: "destructive" });
+      const isPermissionError = error.message?.includes("permission") || error.message?.includes("Permission");
+      toast({
+        title: isPermissionError ? "Inbox reading limited" : "Failed to check inbox",
+        description: isPermissionError
+          ? "Gmail is connected for sending emails. Inbox reading requires additional Google permissions. Check your Gmail app directly for received emails."
+          : error.message,
+        variant: isPermissionError ? "default" : "destructive",
+      });
     },
   });
 
@@ -552,8 +559,8 @@ export default function BusinessPage() {
               {
                 label: "Email", icon: Mail, iconColor: "text-blue-500",
                 connected: integrationStatus?.email.connected ?? false,
-                connectedText: "SMTP configured. Send, receive, and reply to emails.",
-                disconnectedText: "Configure SMTP in Settings to enable email.",
+                connectedText: "Gmail connected. Send emails and auto-outreach enabled.",
+                disconnectedText: "Connect Gmail to enable email sending.",
               },
               {
                 label: "WhatsApp", icon: MessageCircle, iconColor: "text-emerald-500",

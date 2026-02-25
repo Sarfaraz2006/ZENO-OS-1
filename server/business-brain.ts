@@ -30,7 +30,13 @@ async function gatherBusinessContext(): Promise<string> {
   const metrics = await storage.getBusinessMetrics();
   const settings = await storage.getAllSettings();
 
-  const smtpConfigured = settings.find(s => s.key === "smtp_host")?.value ? true : false;
+  let gmailConnected = false;
+  try {
+    const { getGmailProfile } = await import("./gmail-client");
+    const profile = await getGmailProfile();
+    gmailConnected = !!profile.email;
+  } catch {}
+  const smtpConfigured = gmailConnected || (settings.find(s => s.key === "smtp_host")?.value ? true : false);
   const twilioConnected = settings.find(s => s.key === "twilio_connected")?.value === "true";
   const stripeConnected = settings.find(s => s.key === "stripe_connected")?.value === "true";
   const n8nRuns = Number(metrics.find(m => m.metricType === "n8n" && m.metricKey === "runs")?.metricValue || 0);
@@ -63,7 +69,7 @@ async function gatherBusinessContext(): Promise<string> {
 Generated: ${new Date().toISOString()}
 
 ## Integration Status
-- Email (SMTP/IMAP): ${smtpConfigured ? "CONNECTED" : "NOT CONFIGURED"}
+- Email (Gmail): ${smtpConfigured ? "CONNECTED" : "NOT CONFIGURED"}
 - WhatsApp (Twilio): ${twilioConnected ? "CONNECTED" : "NOT CONNECTED"}
 - Stripe Payments: ${stripeConnected ? "CONNECTED" : "NOT CONNECTED"}
 - n8n Automation: ${n8nRuns > 0 ? `ACTIVE (${n8nRuns} runs)` : "NOT TESTED"}
@@ -111,7 +117,7 @@ function generateRuleBasedInsights(context: string): BrainInsight[] {
   const unreplied = parseInt(context.match(/Unreplied Received Emails: (\d+)/)?.[1] || "0");
   const contactCount = parseInt(context.match(/Total Contacts: (\d+)/)?.[1] || "0");
   const paymentTotal = parseFloat(context.match(/Total Revenue: \$(\d+)/)?.[1] || "0");
-  const smtpConnected = context.includes("Email (SMTP/IMAP): CONNECTED");
+  const smtpConnected = context.includes("Email (Gmail): CONNECTED");
   const twilioConnected = context.includes("WhatsApp (Twilio): CONNECTED");
   const stripeConnected = context.includes("Stripe Payments: CONNECTED");
   const n8nActive = context.includes("n8n Automation: ACTIVE");
@@ -119,11 +125,11 @@ function generateRuleBasedInsights(context: string): BrainInsight[] {
   if (!smtpConnected) {
     insights.push({
       type: "suggestion",
-      title: "Email Not Configured",
-      detail: "SMTP is not set up. Configure email in Settings to start sending and receiving business emails. This is essential for client communication.",
+      title: "Email Not Connected",
+      detail: "Gmail is not connected. Connect your Gmail account to start sending business emails and auto-outreach to leads.",
       priority: "high",
       category: "email",
-      action: "Go to Settings → Email & Notifications → SMTP Setup",
+      action: "Connect Gmail via Replit integrations",
     });
   }
 
@@ -238,7 +244,7 @@ function generateRuleBasedInsights(context: string): BrainInsight[] {
 function calculateHealthScore(context: string, insights: BrainInsight[]): { score: number; label: string } {
   let score = 50;
 
-  const smtpConnected = context.includes("Email (SMTP/IMAP): CONNECTED");
+  const smtpConnected = context.includes("Email (Gmail): CONNECTED");
   const twilioConnected = context.includes("WhatsApp (Twilio): CONNECTED");
   const stripeConnected = context.includes("Stripe Payments: CONNECTED");
   const n8nActive = context.includes("n8n Automation: ACTIVE");
