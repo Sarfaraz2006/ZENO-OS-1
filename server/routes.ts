@@ -11,6 +11,7 @@ import { detectTaskType, selectModelForTask, selectModelForMessage, getTaskLabel
 import { fetchGmailThread, getGmailProfile } from "./gmail-client";
 import { startAutonomousAgent, stopAutonomousAgent, isAgentRunning } from "./autonomous-agent";
 import nodemailer from "nodemailer";
+import * as emailService from "./email-service";
 
 function hashPassword(password: string): string {
   return createHash("sha256").update(password).digest("hex");
@@ -1130,6 +1131,35 @@ export async function registerRoutes(
   app.post("/api/email/check-inbox-imap", handleInboxCheck);
 
   app.get("/api/email/check-inbox-imap", handleInboxCheck);
+
+  app.post("/api/email/v2/sync", async (req: any, res) => {
+    try {
+      console.log(`[${req.path}] V2 sync: Starting inbox sync...`);
+
+      req.user = req.user || { id: 0 };
+      const settings = await storage.getEmailSettings(req.user!.id);
+
+      const user = settings.imap_user || settings.smtp_user;
+      const pass = settings.imap_password || settings.smtp_password;
+      const host = settings.imap_host || 'imap.gmail.com';
+
+      if (!user || !pass) {
+        return res.status(500).json({ error: "No credentials found in DB" });
+      }
+
+      const result = await emailService.syncInboxFromImap(req.user!.id, {
+        user,
+        pass,
+        host,
+        port: 993,
+        secure: true,
+      });
+
+      return res.json(result);
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
 
   // --- FRESH EMAIL LOGIC END ---
 

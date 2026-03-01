@@ -52,6 +52,14 @@ export interface IStorage {
   getSetting(key: string): Promise<Setting | undefined>;
   upsertSetting(key: string, value: string): Promise<Setting>;
   getAllSettings(): Promise<Setting[]>;
+  getEmailSettings(userId?: number): Promise<{
+    smtp_user: string;
+    smtp_password: string;
+    smtp_host: string;
+    imap_user: string;
+    imap_password: string;
+    imap_host: string;
+  }>;
 
   getConversationCount(): Promise<number>;
   getMessageCount(): Promise<number>;
@@ -224,6 +232,35 @@ export class DatabaseStorage implements IStorage {
 
   async getAllSettings(): Promise<Setting[]> {
     return db.select().from(settings);
+  }
+
+  async getEmailSettings(_userId?: number): Promise<{
+    smtp_user: string;
+    smtp_password: string;
+    smtp_host: string;
+    imap_user: string;
+    imap_password: string;
+    imap_host: string;
+  }> {
+    const [smtpUser, smtpPass, smtpPassword, smtpHost, imapUser, imapPass, imapPassword, imapHost] = await Promise.all([
+      this.getSetting("smtp_user"),
+      this.getSetting("smtp_pass"),
+      this.getSetting("smtp_password"),
+      this.getSetting("smtp_host"),
+      this.getSetting("imap_user"),
+      this.getSetting("imap_pass"),
+      this.getSetting("imap_password"),
+      this.getSetting("imap_host"),
+    ]);
+
+    return {
+      smtp_user: smtpUser?.value || "",
+      smtp_password: smtpPass?.value || smtpPassword?.value || "",
+      smtp_host: smtpHost?.value || "",
+      imap_user: imapUser?.value || "",
+      imap_password: imapPass?.value || imapPassword?.value || "",
+      imap_host: imapHost?.value || "",
+    };
   }
 
   async getConversationCount(): Promise<number> {

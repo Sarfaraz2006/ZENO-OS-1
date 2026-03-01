@@ -228,7 +228,7 @@ export default function BusinessPage() {
 
   const checkInbox = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/email/check-inbox-imap", {});
+      const res = await apiRequest("POST", "/api/email/v2/sync", {});
       return res.json();
     },
     onSuccess: (data) => {
