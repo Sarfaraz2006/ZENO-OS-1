@@ -79,6 +79,8 @@ interface BusinessEmail {
   subject: string;
   body: string | null;
   status: string;
+  messageId: string | null;
+  threadId: string | null;
   createdAt: string;
 }
 
@@ -226,7 +228,7 @@ export default function BusinessPage() {
 
   const checkInbox = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/email/check-inbox-imap", {});
+      const res = await apiRequest("POST", "/api/email/v2/sync", {});
       return res.json();
     },
     onSuccess: (data) => {
@@ -282,7 +284,7 @@ export default function BusinessPage() {
         to: replyDialog.direction === "received" ? replyDialog.fromAddr : replyDialog.toAddr,
         subject: replyDialog.subject,
         body: replyBody,
-        originalId: replyDialog.id,
+        originalId: replyDialog.messageId || undefined,
       });
       return res.json();
     },
@@ -455,9 +457,9 @@ export default function BusinessPage() {
             {agentStatus?.running ? "Agent ON" : "Agent OFF"}
             {agentStatus?.running && <span className="w-2 h-2 bg-white rounded-full animate-pulse" />}
           </Button>
-          <Button size="sm" variant="outline" className="gap-2 text-xs h-8" onClick={() => checkInbox.mutate()} disabled={checkInbox.isPending} data-testid="button-check-inbox">
+          <Button size="sm" variant="destructive" className="gap-2 text-xs h-8" onClick={() => checkInbox.mutate()} disabled={checkInbox.isPending} data-testid="button-check-inbox">
             {checkInbox.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Inbox className="w-3 h-3" />}
-            Check Inbox
+            MY INBOX (TEST)
           </Button>
           <Button size="sm" className="gap-2 text-xs h-8" onClick={() => setComposeDialog(true)} data-testid="button-compose-email">
             <Send className="w-3 h-3" />
