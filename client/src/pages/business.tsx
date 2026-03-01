@@ -79,6 +79,8 @@ interface BusinessEmail {
   subject: string;
   body: string | null;
   status: string;
+  messageId: string | null;
+  threadId: string | null;
   createdAt: string;
 }
 
@@ -282,7 +284,7 @@ export default function BusinessPage() {
         to: replyDialog.direction === "received" ? replyDialog.fromAddr : replyDialog.toAddr,
         subject: replyDialog.subject,
         body: replyBody,
-        originalId: replyDialog.id,
+        originalId: replyDialog.messageId || undefined,
       });
       return res.json();
     },
