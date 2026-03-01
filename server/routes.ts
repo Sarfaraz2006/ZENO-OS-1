@@ -1034,17 +1034,21 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/email/check-inbox", requireAuth, async (_req, res) => {
+  const handleInboxCheck = async (req: any, res: any) => {
     try {
       console.log("--- DEBUG: RUNNING NEW INBOX LOGIC \
 V2.0 ---");
+      console.log(`[${req.path}] Starting inbox check with blind fallback...`);
       const result = await syncInboxFromImap();
       await storage.createLog({ action: "IMAP inbox checked", details: `Fetched ${result.fetched}, saved ${result.saved} new`, source: "email" });
-      res.json({ success: true, fetched: result.fetched, saved: result.saved });
+      return res.json({ success: true, fetched: result.fetched, saved: result.saved });
     } catch (error: any) {
-      res.status(500).json({ error: error.message || "Failed to check inbox" });
+      console.error(`[${req.path}] Inbox check error:`, error);
+      return res.status(500).json({ error: error.message || "Failed to check inbox via IMAP" });
     }
-  });
+  };
+
+  app.post("/api/email/check-inbox", requireAuth, handleInboxCheck);
 
   app.get("/api/gmail/thread/:threadId", requireAuth, async (req, res) => {
     try {
@@ -1073,36 +1077,11 @@ V2.0 ---");
   });
 
   // === IMAP INBOX CHECK (manual) ===
-  app.post("/api/email/check-inbox-imap", requireAuth, async (_req, res) => {
-    try {
-      const result = await syncInboxFromImap();
-      await storage.createLog({ action: "IMAP inbox checked", details: `Fetched ${result.fetched}, saved ${result.saved} new`, source: "email" });
-      res.json({ success: true, fetched: result.fetched, saved: result.saved });
-    } catch (error: any) {
-      console.error("IMAP check error:", error);
-      res.status(500).json({ error: error.message || "Failed to check inbox via IMAP" });
-    }
-  });
+  app.post("/api/email/check-inbox-imap", requireAuth, handleInboxCheck);
 
-  app.get("/api/email/check-inbox-imap", requireAuth, async (_req, res) => {
-    try {
-      const result = await syncInboxFromImap();
-      await storage.createLog({ action: "IMAP inbox checked", details: `Fetched ${result.fetched}, saved ${result.saved} new`, source: "email" });
-      res.json({ success: true, fetched: result.fetched, saved: result.saved });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message || "Failed to check inbox via IMAP" });
-    }
-  });
+  app.get("/api/email/check-inbox-imap", requireAuth, handleInboxCheck);
 
-  app.post("/api/email/inbox/check", requireAuth, async (_req, res) => {
-    try {
-      const result = await syncInboxFromImap();
-      await storage.createLog({ action: "IMAP inbox checked", details: `Fetched ${result.fetched}, saved ${result.saved} new`, source: "email" });
-      res.json({ success: true, fetched: result.fetched, saved: result.saved });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message || "Failed to check inbox via IMAP" });
-    }
-  });
+  app.post("/api/email/inbox/check", requireAuth, handleInboxCheck);
 
   app.post("/api/business/webhook/n8n", async (req, res) => {
     try {
