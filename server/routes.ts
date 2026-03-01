@@ -157,16 +157,24 @@ export async function registerRoutes(
 
   const syncInboxFromImap = async () => {
     const settings = await getEmailSettings();
-    if (!settings.imap.user || !settings.imap.pass) {
+    const isGmailSmtp = settings.smtp.host.toLowerCase() === "smtp.gmail.com";
+    const effectiveImapHost = settings.imap.host || (isGmailSmtp ? "imap.gmail.com" : settings.smtp.host.replace("smtp", "imap"));
+    const effectiveImapPort = settings.imap.port || (isGmailSmtp ? 993 : 993);
+    const effectiveImapSecure = isGmailSmtp ? true : settings.imap.secure;
+    const effectiveImapUser = settings.imap.user || settings.smtp.user;
+    const effectiveImapPass = settings.imap.pass || settings.smtp.pass;
+
+    // Critical fix: do NOT require explicit imap_* fields when SMTP credentials exist.
+    if (!effectiveImapUser || !effectiveImapPass) {
       throw new Error("Email credentials not configured. Save SMTP user/password in Settings.");
     }
 
     const { ImapFlow } = await import("imapflow");
     const client = new ImapFlow({
-      host: settings.imap.host,
-      port: settings.imap.port,
-      secure: settings.imap.secure,
-      auth: { user: settings.imap.user, pass: settings.imap.pass },
+      host: effectiveImapHost,
+      port: effectiveImapPort,
+      secure: effectiveImapSecure,
+      auth: { user: effectiveImapUser, pass: effectiveImapPass },
       logger: false,
     });
 
@@ -205,7 +213,7 @@ export async function registerRoutes(
             newEmails.push({
               direction: "received",
               fromAddr: env.from?.[0]?.address || "",
-              toAddr: env.to?.[0]?.address || settings.imap.user,
+              toAddr: env.to?.[0]?.address || effectiveImapUser,
               subject: env.subject || "(No subject)",
               body: decodedBody || rawBody || env.subject || "(No content)",
               status: "received",
@@ -846,12 +854,14 @@ export async function registerRoutes(
       await storage.upsertSetting("smtp_port", port || "587");
       await storage.upsertSetting("smtp_user", user || "");
       await storage.upsertSetting("smtp_pass", pass || "");
+      await storage.upsertSetting("smtp_password", pass || "");
       await storage.upsertSetting("smtp_from", from || "");
       await storage.upsertSetting("smtp_secure", secure ? "true" : "false");
       await storage.upsertSetting("imap_host", imapHost || "");
       await storage.upsertSetting("imap_port", imapPort || "993");
       await storage.upsertSetting("imap_user", imapUser || "");
       await storage.upsertSetting("imap_pass", imapPass || "");
+      await storage.upsertSetting("imap_password", imapPass || "");
       await storage.upsertSetting("imap_secure", imapSecure === false ? "false" : "true");
       await storage.upsertSetting("smtp_notify_login", notifyLogin ? "true" : "false");
       await storage.upsertSetting("smtp_notify_api", notifyApi ? "true" : "false");
