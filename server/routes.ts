@@ -1036,6 +1036,8 @@ export async function registerRoutes(
 
   app.post("/api/email/check-inbox", requireAuth, async (_req, res) => {
     try {
+      console.log("--- DEBUG: RUNNING NEW INBOX LOGIC \
+V2.0 ---");
       const result = await syncInboxFromImap();
       await storage.createLog({ action: "IMAP inbox checked", details: `Fetched ${result.fetched}, saved ${result.saved} new`, source: "email" });
       res.json({ success: true, fetched: result.fetched, saved: result.saved });
