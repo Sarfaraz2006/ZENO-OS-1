@@ -1215,7 +1215,7 @@ export default function BusinessPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 mt-1 h-[65vh] overflow-y-auto pr-1">
-            <div className="rounded-lg border border-border/40 bg-muted/10 p-4 whitespace-pre-wrap text-sm leading-6">
+            <div className="rounded-lg border border-border/40 bg-muted/10 p-4 whitespace-pre-wrap break-words text-sm leading-6">
               {readingEmail?.body || "No readable content available for this message."}
             </div>
 
