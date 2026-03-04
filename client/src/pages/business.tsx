@@ -79,6 +79,8 @@ interface BusinessEmail {
   subject: string;
   body: string | null;
   status: string;
+  messageId: string | null;
+  threadId: string | null;
   createdAt: string;
 }
 
@@ -155,7 +157,7 @@ interface EmailQueueItem {
 export default function BusinessPage() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<"overview" | "emails" | "contacts" | "brain" | "leads" | "queue">("overview");
-  const [replyDialog, setReplyDialog] = useState<BusinessEmail | null>(null);
+  const [readingEmail, setReadingEmail] = useState<BusinessEmail | null>(null);
   const [replyBody, setReplyBody] = useState("");
   const [composeDialog, setComposeDialog] = useState(false);
   const [composeTo, setComposeTo] = useState("");
@@ -226,7 +228,7 @@ export default function BusinessPage() {
 
   const checkInbox = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/email/check-inbox-imap", {});
+      const res = await apiRequest("POST", "/api/email/v2/sync", {});
       return res.json();
     },
     onSuccess: (data) => {
@@ -277,18 +279,18 @@ export default function BusinessPage() {
 
   const sendReply = useMutation({
     mutationFn: async () => {
-      if (!replyDialog) throw new Error("No email");
+      if (!readingEmail) throw new Error("No email");
       const res = await apiRequest("POST", "/api/email/reply", {
-        to: replyDialog.direction === "received" ? replyDialog.fromAddr : replyDialog.toAddr,
-        subject: replyDialog.subject,
+        to: readingEmail.direction === "received" ? readingEmail.fromAddr : readingEmail.toAddr,
+        subject: readingEmail.subject,
         body: replyBody,
-        originalId: replyDialog.id,
+        originalId: readingEmail.messageId || undefined,
       });
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/business/emails"] });
-      setReplyDialog(null); setReplyBody("");
+      setReadingEmail(null); setReplyBody("");
       toast({ title: "Reply sent!" });
     },
     onError: (error: Error) => {
@@ -455,9 +457,9 @@ export default function BusinessPage() {
             {agentStatus?.running ? "Agent ON" : "Agent OFF"}
             {agentStatus?.running && <span className="w-2 h-2 bg-white rounded-full animate-pulse" />}
           </Button>
-          <Button size="sm" variant="outline" className="gap-2 text-xs h-8" onClick={() => checkInbox.mutate()} disabled={checkInbox.isPending} data-testid="button-check-inbox">
+          <Button size="sm" variant="destructive" className="gap-2 text-xs h-8" onClick={() => checkInbox.mutate()} disabled={checkInbox.isPending} data-testid="button-check-inbox">
             {checkInbox.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Inbox className="w-3 h-3" />}
-            Check Inbox
+            MY INBOX (TEST)
           </Button>
           <Button size="sm" className="gap-2 text-xs h-8" onClick={() => setComposeDialog(true)} data-testid="button-compose-email">
             <Send className="w-3 h-3" />
@@ -651,7 +653,7 @@ export default function BusinessPage() {
               ) : (
                 <div className="space-y-1">
                   {emails.slice(0, 5).map((email) => (
-                    <div key={email.id} className="flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => setReplyDialog(email)} data-testid={`email-item-${email.id}`}>
+                    <div key={email.id} className="flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => { setReadingEmail(email); }} data-testid={`email-item-${email.id}`}>
                       <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${email.direction === "sent" ? "bg-blue-500/15" : "bg-emerald-500/15"}`}>
                         {email.direction === "sent" ? <Send className="w-3 h-3 text-blue-500" /> : <Inbox className="w-3 h-3 text-emerald-500" />}
                       </div>
@@ -704,7 +706,7 @@ export default function BusinessPage() {
               <ScrollArea className="h-[500px]">
                 <div className="space-y-1">
                   {emails.map((email) => (
-                    <div key={email.id} className="flex items-center gap-3 py-2.5 px-3 rounded-lg hover:bg-muted/30 transition-colors cursor-pointer border border-transparent hover:border-border/30" onClick={() => setReplyDialog(email)} data-testid={`email-full-${email.id}`}>
+                    <div key={email.id} className="flex items-center gap-3 py-2.5 px-3 rounded-lg hover:bg-muted/30 transition-colors cursor-pointer border border-transparent hover:border-border/30" onClick={() => { setReadingEmail(email); }} data-testid={`email-full-${email.id}`}>
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${email.direction === "sent" ? "bg-blue-500/15" : "bg-emerald-500/15"}`}>
                         {email.direction === "sent" ? <Send className="w-3.5 h-3.5 text-blue-500" /> : <Inbox className="w-3.5 h-3.5 text-emerald-500" />}
                       </div>
@@ -723,7 +725,7 @@ export default function BusinessPage() {
                         <span className="text-[10px] text-muted-foreground font-mono">
                           {new Date(email.createdAt).toLocaleDateString()}
                         </span>
-                        <Button size="sm" variant="ghost" className="h-6 text-[10px] gap-1 px-2" onClick={(e) => { e.stopPropagation(); setReplyDialog(email); }}>
+                        <Button size="sm" variant="ghost" className="h-6 text-[10px] gap-1 px-2" onClick={(e) => { e.stopPropagation(); setReadingEmail(email); }}>
                           <Reply className="w-3 h-3" />
                           Reply
                         </Button>
@@ -1201,28 +1203,32 @@ export default function BusinessPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!replyDialog} onOpenChange={() => { setReplyDialog(null); setReplyBody(""); }}>
-        <DialogContent className="max-w-md">
+      <Dialog open={!!readingEmail} onOpenChange={() => { setReadingEmail(null); setReplyBody(""); }}>
+        <DialogContent className="max-w-5xl w-[92vw] max-h-[88vh] overflow-hidden">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-sm">
-              <Reply className="w-4 h-4 text-primary" />
-              {replyDialog?.subject}
+            <DialogTitle className="text-xl font-semibold leading-tight">
+              {readingEmail?.subject || "(No subject)"}
             </DialogTitle>
-            <DialogDescription className="text-xs">
-              {replyDialog?.direction === "received" ? `From: ${replyDialog?.fromAddr}` : `To: ${replyDialog?.toAddr}`}
+            <DialogDescription className="text-xs space-y-1">
+              <div>{readingEmail?.direction === "received" ? `From: ${readingEmail?.fromAddr}` : `To: ${readingEmail?.toAddr}`}</div>
+              <div>{readingEmail ? new Date(readingEmail.createdAt).toLocaleString() : ""}</div>
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3 mt-2">
-            {replyDialog?.body && (
-              <div className="bg-muted/30 rounded-lg p-3 text-xs text-muted-foreground max-h-32 overflow-y-auto border border-border/30">
-                {replyDialog.body}
+          <div className="space-y-4 mt-1 h-[65vh] overflow-y-auto pr-1">
+            <div className="rounded-lg border border-border/40 bg-muted/10 p-4 whitespace-pre-wrap text-sm leading-6">
+              {readingEmail?.body || "No readable content available for this message."}
+            </div>
+
+            <div className="space-y-3 border-t border-border/40 pt-3">
+              <p className="text-xs font-medium text-muted-foreground">Reply</p>
+              <textarea data-testid="textarea-reply-body" value={replyBody} onChange={(e) => setReplyBody(e.target.value)} rows={6} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-primary" placeholder="Write your reply..." />
+              <div className="flex items-center justify-end gap-2">
+                <Button data-testid="button-send-reply" size="sm" className="gap-2 text-xs" disabled={!replyBody || sendReply.isPending} onClick={() => sendReply.mutate()}>
+                  {sendReply.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Reply className="w-3 h-3" />}
+                  Send Reply
+                </Button>
               </div>
-            )}
-            <textarea data-testid="textarea-reply-body" value={replyBody} onChange={(e) => setReplyBody(e.target.value)} rows={4} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-primary" placeholder="Write your reply..." />
-            <Button data-testid="button-send-reply" className="w-full gap-2 text-xs" disabled={!replyBody || sendReply.isPending} onClick={() => sendReply.mutate()}>
-              {sendReply.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Reply className="w-3 h-3" />}
-              Send Reply
-            </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
