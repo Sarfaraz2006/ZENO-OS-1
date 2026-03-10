@@ -1059,13 +1059,6 @@ export async function registerRoutes(
     };
   }
 
-  const emailService = {
-    syncInboxFromImap: async (_userId: number, _config: any) => {
-      const result = await syncInboxFromImap();
-      return result;
-    },
-  };
-
   const handleInboxCheck = async (req: any, res: any) => {
     try {
       console.log(`[${req.path}] FORCE CHECK: Starting inbox sync...`);
@@ -1099,7 +1092,7 @@ export async function registerRoutes(
   };
 
   // Apply to ALL route variants
-  app.post("/api/email/check-inbox", handleInboxCheck);
+  app.post("/api/email/check-inbox", requireAuth, handleInboxCheck);
 
   app.get("/api/gmail/thread/:threadId", requireAuth, async (req, res) => {
     try {
@@ -1128,11 +1121,11 @@ export async function registerRoutes(
   });
 
   // === IMAP INBOX CHECK (manual) ===
-  app.post("/api/email/check-inbox-imap", handleInboxCheck);
+  app.post("/api/email/check-inbox-imap", requireAuth, handleInboxCheck);
 
-  app.get("/api/email/check-inbox-imap", handleInboxCheck);
+  app.get("/api/email/check-inbox-imap", requireAuth, handleInboxCheck);
 
-  app.post("/api/email/v2/sync", async (req: any, res) => {
+  app.post("/api/email/v2/sync", requireAuth, async (req: any, res) => {
     try {
       console.log(`[${req.path}] V2 sync: Starting inbox sync...`);
 
