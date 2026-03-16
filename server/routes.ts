@@ -1,9 +1,10 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import session from "express-session";
+import rateLimit from "express-rate-limit";
 import { storage } from "./storage";
 import { registerChatRoutes } from "./replit_integrations/chat";
-import { randomBytes, createHash } from "crypto";
+import { randomBytes, createHash, scryptSync, timingSafeEqual } from "crypto";
 import { analyzeBusinessWithRules, analyzeBusinessWithAI, getBusinessContextForChat } from "./business-brain";
 import { scrapeAndSaveLeads } from "./lead-scraper";
 import { startEmailQueueWorker, queueEmailsForLeads } from "./email-queue";
@@ -14,7 +15,23 @@ import nodemailer from "nodemailer";
 import * as emailService from "./email-service";
 
 function hashPassword(password: string): string {
-  return createHash("sha256").update(password).digest("hex");
+  const salt = randomBytes(16).toString("hex");
+  const hash = scryptSync(password, salt, 64).toString("hex");
+  return `scrypt:${salt}:${hash}`;
+}
+
+function verifyPassword(password: string, stored: string): boolean {
+  if (stored.startsWith("scrypt:")) {
+    const parts = stored.split(":");
+    if (parts.length !== 3) return false;
+    const salt = parts[1];
+    const hash = parts[2];
+    const supplied = scryptSync(password, salt, 64);
+    const storedBuf = Buffer.from(hash, "hex");
+    return timingSafeEqual(supplied, storedBuf);
+  }
+  // Backwards-compatibility: legacy SHA256 hashes (no prefix)
+  return createHash("sha256").update(password).digest("hex") === stored;
 }
 
 function extractRawBodyFromSource(source: Buffer): string {
@@ -67,9 +84,10 @@ export async function registerRoutes(
   );
 
   const requireAuth = (req: any, res: any, next: any) => {
-    // AUTH DISABLED FOR TESTING - re-enable when project is complete
-    req.session.authenticated = true;
-    return next();
+    if (req.session?.authenticated) {
+      return next();
+    }
+    res.status(401).json({ error: "Unauthorized" });
   };
 
   const requireApiKey = async (req: any, res: any, next: any) => {
@@ -241,12 +259,22 @@ export async function registerRoutes(
 
   await ensureDefaultUser();
 
-  app.post("/api/auth/login", async (req, res) => {
+  const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Too many login attempts. Please try again later." },
+  });
+
+  app.post("/api/auth/login", authLimiter, async (req, res) => {
     try {
       const { password } = req.body;
       const setting = await storage.getSetting("master_password");
-      const storedHash = setting?.value || hashPassword("admin");
-      if (hashPassword(password) === storedHash) {
+      if (!setting?.value) {
+        return res.status(401).json({ error: "Invalid password" });
+      }
+      if (verifyPassword(password, setting.value)) {
         (req.session as any).authenticated = true;
         await storage.createLog({ action: "Login", details: "Dashboard login successful", source: "auth" });
         res.json({ success: true });
@@ -272,12 +300,11 @@ export async function registerRoutes(
     });
   });
 
-  app.post("/api/auth/change-password", requireAuth, async (req, res) => {
+  app.post("/api/auth/change-password", authLimiter, requireAuth, async (req, res) => {
     try {
       const { currentPassword, newPassword } = req.body;
       const setting = await storage.getSetting("master_password");
-      const storedHash = setting?.value || hashPassword("admin");
-      if (hashPassword(currentPassword) !== storedHash) {
+      if (!setting?.value || !verifyPassword(currentPassword, setting.value)) {
         return res.status(400).json({ error: "Current password is incorrect" });
       }
       await storage.upsertSetting("master_password", hashPassword(newPassword));
